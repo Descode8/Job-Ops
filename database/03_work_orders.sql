@@ -37,3 +37,19 @@ create index if not exists work_order_assignments_contractor_idx on public.work_
 create trigger work_orders_set_updated_at
 before update on public.work_orders
 for each row execute function public.set_updated_at();
+
+create or replace function public.set_work_order_completion_date()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.status = 'completed' and (old.status is distinct from 'completed' or new.completed_at is null) then
+    new.completed_at = coalesce(new.completed_at, timezone('utc', now()));
+  end if;
+  return new;
+end;
+$$;
+
+create trigger work_orders_set_completion_date
+before update on public.work_orders
+for each row execute function public.set_work_order_completion_date();

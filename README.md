@@ -8,6 +8,17 @@ npm install           # Install the project dependencies
 npm start             # Start Expo for Expo Go on your local network
 ```
 
+### Connect Supabase
+
+Copy `contractor-portal/.env.example` to `contractor-portal/.env` and replace the values with the public URL and anon key from **Supabase > Settings > API**:
+
+```dotenv
+EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
+```
+
+Restart Expo after changing `.env`. The app now sends phone OTP codes through Supabase and only allows an authenticated user with an active row in `public.contractors` to continue. Never put a service-role key in `.env` or the mobile app.
+
 Keep this terminal running. Connect your iPhone to the same Wi-Fi network, open **Expo Go**, and scan the QR code shown by Expo. If your network blocks device connections, use the tunnel option instead:
 
 ```bash
@@ -24,7 +35,7 @@ npm run web           # Start the app in a web browser
 
 > **A mobile-first job management platform for contractors and office staff.**
 
-The Marty Wright Contractor Portal will let contractors securely sign in by phone, view assigned work, update job progress, capture field photos, upload invoices and receipts, and submit completed work from a mobile device. Office staff will use a companion web dashboard to assign jobs, review submissions, approve or reject work, and generate reports.
+The Marty Wright Contractor Portal will let contractors securely sign in with a username and password, view assigned work, update job progress, capture field photos, upload invoices and receipts, and submit completed work from a mobile device. Office staff will use a companion web dashboard to assign jobs, review submissions, approve or reject work, and generate reports.
 
 ## Table of Contents
 
@@ -68,7 +79,7 @@ This approach gives the project a shared TypeScript ecosystem while still produc
 
 ### Contractor Mobile App
 
-- Sign in with a cell phone number and SMS verification code.
+- Sign in with a username and password through Supabase Auth.
 - View assigned jobs and filter by priority or status.
 - Use a separate **Service** tab for repair and service requests.
 - Use a **New Work Order** form to create an assignment with an address, description, contractor, priority, deadline, and recipient email.
@@ -87,7 +98,7 @@ The customer's requested scope is represented by the following product requireme
 
 ### Contractor Access and Work Tracking
 
-- Phone-number login with text-message verification; email is not required.
+- Username and password login through Supabase Auth; SMS verification is not required for the current release.
 - Assigned jobs organized by property address and contractor identity.
 - Priority levels: **Low**, **Medium**, **High**, and **Emergency**.
 - Statuses: **Not Started**, **In Progress**, **Submitted**, **Approved**, **Rejected**, and **Completed**.
@@ -143,7 +154,7 @@ Completion submissions include the checklist state, completion date, final photo
 
 - **Backend platform:** Supabase
 - **Database:** PostgreSQL
-- **Authentication:** Supabase Auth with phone OTP and an SMS provider such as Twilio
+- **Authentication:** Supabase Auth with email/password credentials; phone remains a contractor contact field
 - **File and image storage:** Supabase Storage
 - **Authorization:** PostgreSQL Row Level Security (RLS)
 - **Server-side workflows:** Supabase Edge Functions
@@ -275,8 +286,8 @@ Use short-lived signed URLs for downloads. Contractors should access only files 
 
 ## Security Requirements
 
-- Require phone verification before creating an authenticated session.
-- Restrict contractor registration to invited or pre-approved phone numbers.
+- Require Supabase Auth credentials before creating an authenticated session.
+- Restrict contractor access to invited or pre-approved records in `public.contractors`.
 - Rate-limit OTP requests and verification attempts.
 - Enable RLS on every exposed database table.
 - Keep storage buckets private and protect them with RLS policies.
@@ -284,7 +295,7 @@ Use short-lived signed URLs for downloads. Contractors should access only files 
 - Keep service-role keys, SMS credentials, and email credentials out of client apps.
 - Use server-side functions for privileged operations.
 - Log assignments, status changes, approvals, rejections, exports, and check requests.
-- Normalize phone numbers to E.164 format.
+- Store contractor phone numbers in a consistent format for contact purposes.
 - Use least-privilege roles for contractors, office staff, and administrators.
 - Define retention and deletion rules for invoices, receipts, photos, and personal data.
 - Confirm customer or government compliance requirements before launch.
@@ -335,7 +346,7 @@ You do not need Xcode or Android Studio to begin. Later, Xcode on a Mac is neede
 - Initialize Expo, Next.js, and Supabase projects.
 - Add local, staging, and production environments.
 - Create database migrations and seed data.
-- Implement phone OTP and role-based authorization.
+- Implement username/password authentication and role-based authorization.
 
 ### Phase 2: Contractor MVP
 
@@ -380,8 +391,9 @@ You do not need Xcode or Android Studio to begin. Later, Xcode on a Mac is neede
 
 The first release should include only the workflow required to assign, perform, submit, and approve a job:
 
-- Invited contractor phone login
+- Invited contractor username/password login
 - Assigned-job list and job details
+- Completed-work-order history in the **Complete WO** tab
 - Separate Service tab
 - New Work Order form and email delivery workflow
 - Priority and status display
@@ -430,7 +442,7 @@ CHECK_REQUEST_RECIPIENT=
 
 ## Definition of Done
 
-- A pre-approved contractor can sign in by phone OTP.
+- A pre-approved contractor can sign in with a username and password.
 - A contractor sees only jobs assigned to that contractor.
 - Office staff can create, prioritize, and assign a job.
 - A contractor can update status, add notes, and upload required files.
@@ -447,17 +459,17 @@ CHECK_REQUEST_RECIPIENT=
 
 - [Expo documentation](https://docs.expo.dev/)
 - [Expo development builds](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Supabase phone login](https://supabase.com/docs/guides/auth/phone-login)
+- [Supabase password authentication](https://supabase.com/docs/guides/auth/passwords)
 - [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
 - [Supabase Storage access control](https://supabase.com/docs/guides/storage/security/access-control)
 - [Next.js App Router](https://nextjs.org/docs/app)
 
 ## Current Status
 
-**Interactive Expo prototype in progress.** The mobile shell includes a contractor phone-login screen, branded dashboard, assigned-jobs tab, Service tab, New Work Order form, and interactive home completion checklist using local sample data. The SQL files in `database/` describe the proposed schema but have not been run against a live PostgreSQL/Supabase project. Supabase authentication, contractor allow-list enforcement, database persistence, camera and file uploads, notifications, office administration, exports, and real work-order email delivery remain backend work.
+**Interactive Expo prototype in progress.** The mobile shell includes a contractor username/password login screen, branded dashboard, live Supabase queries for assigned jobs, Service, and Complete WO history, a New Work Order form that saves property/order/assignment records, and an interactive home completion checklist. Camera and document uploads, persisted checklist mutations, status submission, notifications, office administration, exports, and real work-order email delivery remain unfinished backend or workflow work.
 
 ### First Recommended Build
 
 Prototype the contractor workflow first:
 
-**Phone login -> Assigned jobs / Service -> Job details -> Checklist and evidence -> Submit for review**
+**Username/password login -> Assigned jobs / Service -> Job details -> Checklist and evidence -> Submit for review**

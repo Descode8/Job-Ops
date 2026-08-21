@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { supabase } from '@/lib/supabase';
+
 const YELLOW = '#FFF200';
 const NAVY = '#062C5B';
 const BLUE = '#1E67B2';
@@ -19,18 +21,94 @@ export default function WorkOrderScreen() {
   const [recipientEmail, setRecipientEmail] = useState('');
   const [deadline, setDeadline] = useState('');
   const [priority, setPriority] = useState('Medium');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submitWorkOrder = () => {
+  const submitWorkOrder = async () => {
     if (!title.trim() || !address.trim() || !description.trim() || !recipientEmail.trim()) {
       Alert.alert('Required information missing', 'Enter a title, address, description, and recipient email before submitting.');
       return;
     }
 
-    const workOrderNumber = `MW-${Math.floor(1000 + Math.random() * 9000)}`;
-    Alert.alert(
-      'Work order created',
-      `Work order #${workOrderNumber} is ready. An email will be sent to ${recipientEmail.trim()} when email delivery is connected.`,
-    );
+    setIsSubmitting(true);
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      setIsSubmitting(false);
+      Alert.alert('Sign in required', 'Sign in before creating a work order.');
+      return;
+    }
+
+    const { data: creator, error: creatorError } = await supabase
+      .from('contractors')
+      .select('id')
+      .eq('auth_user_id', authData.user.id)
+      .eq('is_active', true)
+      .single();
+
+    if (creatorError || !creator) {
+      setIsSubmitting(false);
+      Alert.alert('Contractor record not found', 'Your authenticated account is not linked to an active contractor record.');
+      return;
+    }
+
+    const addressParts = address.split(',').map((part) => part.trim()).filter(Boolean);
+    const { data: property, error: propertyError } = await supabase
+      .from('properties')
+      .insert({
+        address_line_1: addressParts[0] ?? address.trim(),
+        city: addressParts[1] ?? 'Unknown',
+        state: addressParts[2] ?? 'SC',
+        postal_code: '00000',
+      })
+      .select('id')
+      .single();
+
+    if (propertyError || !property) {
+      setIsSubmitting(false);
+      Alert.alert('Could not save property', propertyError?.message ?? 'The property could not be created.');
+      return;
+    }
+
+    const workOrderNumber = `MW-${Date.now().toString().slice(-6)}`;
+    const parsedDeadline = deadline.trim() ? new Date(deadline.trim()) : null;
+    const { data: workOrder, error: workOrderError } = await supabase
+      .from('work_orders')
+      .insert({
+        work_order_number: workOrderNumber,
+        property_id: property.id,
+        title: title.trim(),
+        description: description.trim(),
+        kind: 'other',
+        priority: priority.toLowerCase(),
+        deadline_at: parsedDeadline && !Number.isNaN(parsedDeadline.valueOf()) ? parsedDeadline.toISOString() : null,
+        created_by: creator.id,
+        recipient_email: recipientEmail.trim(),
+      })
+      .select('id')
+      .single();
+
+    if (workOrderError || !workOrder) {
+      setIsSubmitting(false);
+      Alert.alert('Could not create work order', workOrderError?.message ?? 'The work order could not be created.');
+      return;
+    }
+
+    const { error: assignmentError } = await supabase
+      .from('work_order_assignments')
+      .insert({ work_order_id: workOrder.id, contractor_id: creator.id });
+
+    setIsSubmitting(false);
+    if (assignmentError) {
+      Alert.alert('Work order created, assignment failed', assignmentError.message);
+      return;
+    }
+
+    Alert.alert('Work order created', `#${workOrderNumber} was saved. Email delivery requires the server email provider to be configured.`);
+    setTitle('');
+    setAddress('');
+    setDescription('');
+    setContractor('');
+    setRecipientEmail('');
+    setDeadline('');
   };
 
   return (
@@ -74,9 +152,9 @@ export default function WorkOrderScreen() {
           <Text style={styles.emailNoticeText}>The submitted work-order details will be sent to the email above after the secure server email service is connected.</Text>
         </View>
 
-        <TouchableOpacity style={styles.submitButton} onPress={submitWorkOrder} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.submitButton} onPress={submitWorkOrder} activeOpacity={0.85} disabled={isSubmitting}>
           <Ionicons name="send-outline" size={20} color={NAVY} />
-          <Text style={styles.submitText}>Create and submit work order</Text>
+          <Text style={styles.submitText}>{isSubmitting ? 'Saving work order...' : 'Create and submit work order'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

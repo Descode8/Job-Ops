@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image, ImageBackground } from 'expo-image';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { supabase } from '@/lib/supabase';
 
 const YELLOW = '#FFF200';
 const NAVY = '#062C5B';
@@ -30,7 +33,64 @@ const checklistItems = [
 ];
 
 export default function HomeScreen() {
+  const [contractorName, setContractorName] = useState('');
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [completedChecklist, setCompletedChecklist] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadDashboard = useCallback(async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        setIsLoading(false);
+        return;
+      }
+
+      const { data: contractor } = await supabase
+        .from('contractors')
+        .select('id, full_name')
+        .eq('auth_user_id', authData.user.id)
+        .eq('is_active', true)
+        .single();
+
+      if (!contractor) {
+        setIsLoading(false);
+        return;
+      }
+
+      setContractorName(contractor.full_name);
+      const { data: assignments } = await supabase
+        .from('work_order_assignments')
+        .select('work_order:work_orders(id, work_order_number, title, status, priority, deadline_at, properties(address_line_1, city, state))')
+        .eq('contractor_id', contractor.id)
+        .is('unassigned_at', null);
+
+      const orders = (assignments ?? [])
+        .map((assignment) => assignment.work_order)
+        .filter(Boolean) as unknown as WorkOrder[];
+      setWorkOrders(orders);
+      setIsLoading(false);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadDashboard();
+    }, [loadDashboard]),
+  );
+
+  const activeWorkOrders = workOrders.filter((workOrder) => workOrder.status !== 'completed');
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const endOfToday = startOfToday + 24 * 60 * 60 * 1000;
+  const dueToday = activeWorkOrders.filter((workOrder) => {
+    if (!workOrder.deadline_at) return false;
+    const deadline = new Date(workOrder.deadline_at).getTime();
+    return deadline >= startOfToday && deadline < endOfToday;
+  }).length;
+  const needsUpdate = activeWorkOrders.filter((workOrder) => workOrder.status === 'not_started').length;
+  const currentWorkOrder = activeWorkOrders.find((workOrder) => workOrder.status === 'in_progress') ?? activeWorkOrders[0];
+  const firstName = contractorName.split(' ')[0] || 'Contractor';
+  const avatarInitials = contractorName.split(' ').filter(Boolean).map((name) => name[0]).join('').slice(0, 2).toUpperCase() || 'CT';
+  const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
 
   const toggleChecklistItem = (item: string) => {
     setCompletedChecklist((current) =>
@@ -51,11 +111,11 @@ export default function HomeScreen() {
 
         <View style={styles.greetingRow}>
           <View>
-            <Text style={styles.eyebrow}>THURSDAY, AUGUST 20</Text>
-            <Text style={styles.greeting}>Good morning, James</Text>
+            <Text style={styles.eyebrow}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}</Text>
+            <Text style={styles.greeting}>{greeting}, {firstName}</Text>
           </View>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>JD</Text>
+            <Text style={styles.avatarText}>{avatarInitials}</Text>
           </View>
         </View>
 
@@ -66,54 +126,54 @@ export default function HomeScreen() {
           </View>
           <View style={styles.summaryStats}>
             <View>
-              <Text style={styles.summaryNumber}>04</Text>
+              <Text style={styles.summaryNumber}>{isLoading ? '--' : activeWorkOrders.length}</Text>
               <Text style={styles.summaryText}>Assigned jobs</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View>
-              <Text style={styles.summaryNumber}>02</Text>
+              <Text style={styles.summaryNumber}>{isLoading ? '--' : dueToday}</Text>
               <Text style={styles.summaryText}>Due today</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View>
-              <Text style={styles.summaryNumber}>01</Text>
+              <Text style={styles.summaryNumber}>{isLoading ? '--' : needsUpdate}</Text>
               <Text style={styles.summaryText}>Needs update</Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.sectionHeading}>
+        {currentWorkOrder && <View style={styles.sectionHeading}>
           <Text style={styles.sectionTitle}>Continue working</Text>
           <TouchableOpacity>
             <Text style={styles.linkText}>View all</Text>
           </TouchableOpacity>
-        </View>
+        </View>}
 
-        <TouchableOpacity style={styles.jobCard} activeOpacity={0.88}>
+        {currentWorkOrder && <TouchableOpacity style={styles.jobCard} activeOpacity={0.88}>
           <View style={styles.jobTopLine}>
             <View style={styles.statusPill}>
               <View style={styles.statusDot} />
               <Text style={styles.statusText}>IN PROGRESS</Text>
             </View>
-            <Text style={styles.jobId}>JOB #MW-1048</Text>
+              <Text style={styles.jobId}>JOB #{currentWorkOrder.work_order_number}</Text>
           </View>
-          <Text style={styles.jobTitle}>Set-up and finish inspection</Text>
+          <Text style={styles.jobTitle}>{currentWorkOrder.title}</Text>
           <View style={styles.addressRow}>
             <Ionicons name="location-outline" size={18} color={BLUE} />
-            <Text style={styles.address}>214 Brookstone Drive, Anderson, SC</Text>
+            <Text style={styles.address}>{formatAddress(currentWorkOrder.properties)}</Text>
           </View>
           <View style={styles.jobFooter}>
-            <Text style={styles.jobMeta}>Due today, 4:00 PM</Text>
+            <Text style={styles.jobMeta}>{formatDeadline(currentWorkOrder.deadline_at)}</Text>
             <View style={styles.arrowButton}>
               <Ionicons name="arrow-forward" size={18} color={PAPER} />
             </View>
           </View>
-        </TouchableOpacity>
+        </TouchableOpacity>}
 
-        <View style={styles.checklistCard}>
+        {currentWorkOrder && <View style={styles.checklistCard}>
           <View style={styles.checklistHeader}>
             <View>
-              <Text style={styles.checklistEyebrow}>214 BROOKSTONE DRIVE</Text>
+              <Text style={styles.checklistEyebrow}>{formatAddress(currentWorkOrder.properties).toUpperCase()}</Text>
               <Text style={styles.checklistTitle}>Home completion checklist</Text>
             </View>
             <Text style={styles.checklistCount}>{completedChecklist.length}/{checklistItems.length}</Text>
@@ -137,7 +197,7 @@ export default function HomeScreen() {
               );
             })}
           </View>
-        </View>
+        </View>}
 
         <View style={styles.sectionHeading}>
           <Text style={styles.sectionTitle}>Quick actions</Text>
@@ -170,6 +230,24 @@ function ActionButton({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; l
       <Text style={styles.actionLabel}>{label}</Text>
     </TouchableOpacity>
   );
+}
+
+type WorkOrder = {
+  work_order_number: string;
+  title: string;
+  status: string;
+  deadline_at: string | null;
+  properties: { address_line_1: string; city: string; state: string } | null;
+};
+
+function formatAddress(property: WorkOrder['properties']) {
+  if (!property) return 'Address unavailable';
+  return `${property.address_line_1}, ${property.city}, ${property.state}`;
+}
+
+function formatDeadline(deadline: string | null) {
+  if (!deadline) return 'No deadline set';
+  return `Due ${new Date(deadline).toLocaleDateString()}`;
 }
 
 const styles = StyleSheet.create({

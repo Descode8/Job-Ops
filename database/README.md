@@ -4,6 +4,12 @@ This folder contains the proposed PostgreSQL schema for **Marty Wright Contracto
 
 These files define the database structure; they do not create a hosted or connected database by themselves. Run them in a Supabase SQL Editor or PostgreSQL migration after creating the project.
 
+## One-file setup
+
+For a new Supabase project, use [`schema.sql`](schema.sql). Copy and paste the entire file into the SQL Editor and run it once. It combines the types, tables, checklist seed data, indexes, triggers, and RLS policies below.
+
+For local testing, run [`seed_test_data.sql`](seed_test_data.sql) after the schema. It links the existing Supabase Auth user to a contractor record and adds the sample property. The Auth user UUID in that file must match a user in **Authentication > Users**.
+
 1. `00_extensions_and_functions.sql` - UUID support and shared timestamp trigger.
 2. `01_types.sql` - roles, work-order statuses, priorities, file types, and delivery states.
 3. `02_people_and_properties.sql` - portal users and home/property addresses.
@@ -11,8 +17,13 @@ These files define the database structure; they do not create a hosted or connec
 5. `04_work_order_records.sql` - photos, documents, notes, and materials.
 6. `05_checklists.sql` - the required home completion checklist and per-order state.
 7. `06_reviews_communications_audit.sql` - reviews, email delivery, notifications, and audit history.
+8. `07_row_level_security.sql` - Supabase RLS policies for contractor and office access.
+9. `08_remove_contractor_number.sql` - removes the deprecated contractor number from an existing database.
+10. `09_remove_company_name.sql` - removes the shared company name from an existing database.
+11. `10_completion_timestamp.sql` - records `completed_at` automatically when a work order is completed.
+12. `11_contractor_work_order_permissions.sql` - allows an active contractor to create and self-assign a work order.
 
-The schema assumes Supabase PostgreSQL because `contractors.auth_user_id` references `auth.users`. If this is run outside Supabase, replace that foreign key with the project's authentication table.
+The schema assumes Supabase PostgreSQL because `contractors.auth_user_id` references `auth.users`. The app uses the contractor's Supabase Auth email as the username and a password for sign-in; `phone_number` remains a contractor contact field. If this is run outside Supabase, replace that foreign key with the project's authentication table.
 
 ## Work-order email flow
 
@@ -20,4 +31,12 @@ The mobile app should create a work order through a protected server endpoint. T
 
 ## Future migration work
 
-Before production, add Row Level Security policies so contractors can only read assigned work orders and related files, while office staff can manage assignments, reviews, exports, and email workflows.
+Run `07_row_level_security.sql` after the tables exist. It enables Row Level Security and adds policies so contractors can only read assigned work orders and related files, while office staff can manage assignments, reviews, exports, and email workflows. The policies require a matching authenticated Supabase user in `contractors.auth_user_id`.
+
+If the database was already created before `contractor_number` was removed, run `08_remove_contractor_number.sql` once. This is a schema change and should only be run after confirming the field is not needed.
+
+If the database was already created before `company_name` was removed, run `09_remove_company_name.sql` once. Contractors are assumed to belong to the same company.
+
+If the database was already created before automatic completion timestamps were added, run `10_completion_timestamp.sql` once. Completed work orders remain in `work_orders` with `status = 'completed'`; they are never deleted.
+
+If the contractor app should create work orders, run `11_contractor_work_order_permissions.sql` once. It allows an active contractor to create a property, create an order with themselves as `created_by`, and self-assign that order.

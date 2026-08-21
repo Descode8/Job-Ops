@@ -21,6 +21,7 @@ const MAPPING = {
   'briefcase.fill': 'work',
   'wrench.and.screwdriver.fill': 'build',
   'square.and.pencil': 'edit',
+  'checkmark.seal.fill': 'verified',
 } as IconMapping;
 
 /**

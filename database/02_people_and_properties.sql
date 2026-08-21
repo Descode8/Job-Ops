@@ -4,11 +4,9 @@
 create table if not exists public.contractors (
   id uuid primary key default gen_random_uuid(),
   auth_user_id uuid unique references auth.users(id) on delete set null,
-  contractor_number text unique,
   full_name text not null,
   phone_number text not null unique,
   email text,
-  company_name text,
   role public.user_role not null default 'contractor',
   is_active boolean not null default true,
   created_at timestamptz not null default timezone('utc', now()),

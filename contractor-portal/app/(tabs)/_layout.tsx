@@ -28,7 +28,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Assigned jobs',
+          title: 'Jobs',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="briefcase.fill" color={color} />,
         }}
       />
@@ -42,8 +42,15 @@ export default function TabLayout() {
       <Tabs.Screen
         name="work-order"
         options={{
-          title: 'New order',
+          title: 'New WO',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="square.and.pencil" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="completed"
+        options={{
+          title: 'Complete WO',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="checkmark.seal.fill" color={color} />,
         }}
       />
     </Tabs>
