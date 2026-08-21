@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router';
+import { ImageBackground } from 'expo-image';
 import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
@@ -14,7 +15,8 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: '#FFF200',
         tabBarInactiveTintColor: Colors[colorScheme ?? 'light'].tabIconDefault,
-        tabBarStyle: { backgroundColor: '#062C5B', borderTopColor: '#1E67B2' },
+        tabBarStyle: { backgroundColor: 'transparent', borderTopColor: '#1E67B2' },
+        tabBarBackground: () => <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={{ flex: 1 }} contentFit="cover" />,
         headerShown: false,
         tabBarButton: HapticTab,
       }}>

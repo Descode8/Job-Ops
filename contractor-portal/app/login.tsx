@@ -6,8 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '@/lib/supabase';
 
-const YELLOW = '#FFF200';
-const NAVY = '#062C5B';
+const YELLOW = '#F3EC35';
+const NAVY = '#003366';
 const BLUE = '#1E67B2';
 const PAPER = '#FFFFFF';
 const MUTED = '#566273';
@@ -30,7 +30,7 @@ export default function LoginScreen() {
 
     if (error || !data.user) {
       setIsLoading(false);
-      Alert.alert('Sign in failed', error?.message ?? 'Supabase did not return a user session.');
+      Alert.alert('Log in failed', error?.message ?? 'Supabase did not return a user session.');
       return;
     }
 
@@ -53,13 +53,12 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.hero}>
-          <Image source={require('@/assets/images/Marty-Wright-Home-Sales_anderson.png')} style={styles.logo} />
+          <Image source={require('@/assets/images/Marty-Wright-Home-Sales_anderson.png')} style={styles.logo} resizeMode="contain" />
           <View style={styles.heroCopy}>
             <Text style={styles.heroKicker}>CONTRACTOR ACCESS</Text>
             <Text style={styles.heroTitle}>Your work, organized.</Text>
-            <Text style={styles.heroText}>Sign in with the username and password connected to your contractor account.</Text>
           </View>
         </ImageBackground>
 
@@ -73,7 +72,7 @@ export default function LoginScreen() {
             <Ionicons name="shield-checkmark-outline" size={19} color={BLUE} />
             <Text style={styles.accessText}>CONTRACTORS ONLY</Text>
           </View>
-          <Text style={styles.title}>Sign in</Text>
+          <Text style={styles.title}>Log in</Text>
           <Text style={styles.subtitle}>Use the email address associated with your contractor account as your username.</Text>
 
           <Text style={styles.label}>Username</Text>
@@ -81,7 +80,7 @@ export default function LoginScreen() {
             style={styles.input}
             value={username}
             onChangeText={setUsername}
-            placeholder="jaden.humphries@gmail.com"
+            placeholder="Enter your email"
             placeholderTextColor="#8A98A8"
             keyboardType="email-address"
             autoCapitalize="none"
@@ -104,7 +103,7 @@ export default function LoginScreen() {
           />
 
           <TouchableOpacity style={styles.primaryButton} onPress={signIn} activeOpacity={0.85} disabled={isLoading}>
-            <Text style={styles.primaryButtonText}>{isLoading ? 'Signing in...' : 'Sign in'}</Text>
+            <Text style={styles.primaryButtonText}>{isLoading ? 'Logging in...' : 'Log in'}</Text>
             <Ionicons name="arrow-forward" size={19} color={NAVY} />
           </TouchableOpacity>
 
@@ -117,23 +116,23 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: PAPER },
+  safeArea: { flex: 1, backgroundColor: 'transparent' },
   flex: { flex: 1 },
-  hero: { minHeight: 285, paddingHorizontal: 22, paddingTop: 23, paddingBottom: 30, justifyContent: 'space-between' },
-  logo: { width: 177, height: 82 },
+  hero: { minHeight: 150, paddingHorizontal: 22, paddingTop: 15, paddingBottom: 15, justifyContent: 'space-between' },
+  logo: { width: 190, height: 88, alignSelf: 'flex-start' },
   heroCopy: { maxWidth: 310 },
   heroKicker: { color: YELLOW, fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 9 },
   heroTitle: { color: PAPER, fontSize: 29, fontWeight: '800', marginBottom: 8 },
   heroText: { color: '#DDE8F3', fontSize: 13, lineHeight: 19 },
   formScroll: { flex: 1 },
   form: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 25, paddingBottom: 24 },
-  accessLabel: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  accessLabel: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, borderRadius: 6 },
   accessText: { color: BLUE, fontSize: 10, fontWeight: '900', letterSpacing: 1.2, marginLeft: 7 },
   title: { color: NAVY, fontSize: 27, fontWeight: '800' },
   subtitle: { color: MUTED, fontSize: 13, marginTop: 6, marginBottom: 24 },
   label: { color: NAVY, fontSize: 11, fontWeight: '800', marginBottom: 7, marginTop: 15 },
-  input: { minHeight: 50, borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', paddingHorizontal: 14, color: NAVY, fontSize: 15 },
-  primaryButton: { minHeight: 52, backgroundColor: YELLOW, marginTop: 24, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 9 },
+  input: { minHeight: 50, borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', paddingHorizontal: 14, color: NAVY, fontSize: 15, borderRadius: 6 },
+  primaryButton: { minHeight: 52, backgroundColor: YELLOW, marginTop: 24, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 9, borderRadius: 6 },
   primaryButtonText: { color: NAVY, fontSize: 13, fontWeight: '900' },
   demoText: { color: MUTED, fontSize: 11, lineHeight: 16, marginTop: 14 },
   footerText: { color: MUTED, fontSize: 11, lineHeight: 16, marginTop: 'auto', paddingBottom: 20 },

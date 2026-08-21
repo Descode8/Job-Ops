@@ -1,162 +1,197 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ImageBackground } from 'expo-image';
+import { FunctionsHttpError } from '@supabase/supabase-js';
+import { useEffect, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '@/lib/supabase';
 
 const YELLOW = '#FFF200';
-const NAVY = '#062C5B';
+const NAVY = '#003366';
 const BLUE = '#1E67B2';
 const INK = '#172033';
 const PAPER = '#FFFFFF';
 const MUTED = '#566273';
-const priorities = ['Low', 'Medium', 'High', 'Emergency'];
+const WORK_ORDER_RECIPIENT = 'jhumphries@shopmwhs.net';
+
+type ContractorOption = { id: string; full_name: string };
 
 export default function WorkOrderScreen() {
-  const [title, setTitle] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
-  const [contractor, setContractor] = useState('');
-  const [recipientEmail, setRecipientEmail] = useState('');
-  const [deadline, setDeadline] = useState('');
-  const [priority, setPriority] = useState('Medium');
+  const [contractors, setContractors] = useState<ContractorOption[]>([]);
+  const [currentContractorId, setCurrentContractorId] = useState('');
+  const [selectedContractorId, setSelectedContractorId] = useState('');
+  const [isContractorListOpen, setIsContractorListOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    const loadContractors = async () => {
+      const [{ data, error }, { data: authData }] = await Promise.all([
+        supabase.rpc('list_available_contractors'),
+        supabase.auth.getUser(),
+      ]);
+      if (error) {
+        Alert.alert('Could not load contractors', 'Apply database/12_work_order_offers.sql to Supabase, then try again.');
+        return;
+      }
+
+      const { data: currentContractor } = authData.user
+        ? await supabase
+            .from('contractors')
+            .select('id, full_name')
+            .eq('auth_user_id', authData.user.id)
+            .eq('is_active', true)
+            .single()
+        : { data: null };
+
+      const availableContractors = (data ?? []) as ContractorOption[];
+      setContractors(currentContractor ? [currentContractor, ...availableContractors] : availableContractors);
+      if (currentContractor) {
+        setCurrentContractorId(currentContractor.id);
+        setSelectedContractorId(currentContractor.id);
+      }
+    };
+
+    void loadContractors();
+  }, []);
+
   const submitWorkOrder = async () => {
-    if (!title.trim() || !address.trim() || !description.trim() || !recipientEmail.trim()) {
-      Alert.alert('Required information missing', 'Enter a title, address, description, and recipient email before submitting.');
+    if (!customerName.trim() || !customerPhone.trim() || !address.trim() || !description.trim()) {
+      Alert.alert('Required information missing', 'Enter all required work-order details before submitting.');
+      return;
+    }
+
+    const assigneeId = selectedContractorId || currentContractorId;
+    if (!assigneeId) {
+      Alert.alert('Could not identify contractor', 'Log in again, then retry creating the work order.');
       return;
     }
 
     setIsSubmitting(true);
-    const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) {
-      setIsSubmitting(false);
-      Alert.alert('Sign in required', 'Sign in before creating a work order.');
-      return;
-    }
-
-    const { data: creator, error: creatorError } = await supabase
-      .from('contractors')
-      .select('id')
-      .eq('auth_user_id', authData.user.id)
-      .eq('is_active', true)
-      .single();
-
-    if (creatorError || !creator) {
-      setIsSubmitting(false);
-      Alert.alert('Contractor record not found', 'Your authenticated account is not linked to an active contractor record.');
-      return;
-    }
-
     const addressParts = address.split(',').map((part) => part.trim()).filter(Boolean);
-    const { data: property, error: propertyError } = await supabase
-      .from('properties')
-      .insert({
-        address_line_1: addressParts[0] ?? address.trim(),
-        city: addressParts[1] ?? 'Unknown',
-        state: addressParts[2] ?? 'SC',
-        postal_code: '00000',
-      })
-      .select('id')
-      .single();
-
-    if (propertyError || !property) {
-      setIsSubmitting(false);
-      Alert.alert('Could not save property', propertyError?.message ?? 'The property could not be created.');
-      return;
-    }
-
-    const workOrderNumber = `MW-${Date.now().toString().slice(-6)}`;
-    const parsedDeadline = deadline.trim() ? new Date(deadline.trim()) : null;
-    const { data: workOrder, error: workOrderError } = await supabase
-      .from('work_orders')
-      .insert({
-        work_order_number: workOrderNumber,
-        property_id: property.id,
-        title: title.trim(),
-        description: description.trim(),
-        kind: 'other',
-        priority: priority.toLowerCase(),
-        deadline_at: parsedDeadline && !Number.isNaN(parsedDeadline.valueOf()) ? parsedDeadline.toISOString() : null,
-        created_by: creator.id,
-        recipient_email: recipientEmail.trim(),
-      })
-      .select('id')
-      .single();
-
-    if (workOrderError || !workOrder) {
-      setIsSubmitting(false);
-      Alert.alert('Could not create work order', workOrderError?.message ?? 'The work order could not be created.');
-      return;
-    }
-
-    const { error: assignmentError } = await supabase
-      .from('work_order_assignments')
-      .insert({ work_order_id: workOrder.id, contractor_id: creator.id });
+    const { data, error: offerError } = await supabase.rpc('create_and_offer_work_order', {
+      p_customer_name: customerName.trim(),
+      p_customer_phone: customerPhone.trim(),
+      p_address_line_1: addressParts[0] ?? address.trim(),
+      p_city: addressParts[1] ?? 'Unknown',
+      p_state: addressParts[2] ?? 'SC',
+      p_description: description.trim(),
+      p_recipient_id: assigneeId,
+    });
 
     setIsSubmitting(false);
-    if (assignmentError) {
-      Alert.alert('Work order created, assignment failed', assignmentError.message);
+    if (offerError) {
+      Alert.alert('Could not Create Work Order', offerError.message);
       return;
     }
 
-    Alert.alert('Work order created', `#${workOrderNumber} was saved. Email delivery requires the server email provider to be configured.`);
-    setTitle('');
+    const isAssignedToMe = assigneeId === currentContractorId;
+    const selectedContractor = contractors.find((contractor) => contractor.id === assigneeId);
+    const assigneeName = isAssignedToMe ? 'you' : (selectedContractor?.full_name ?? 'the selected contractor');
+    const workOrderId = data?.[0]?.work_order_id;
+    const workOrderNumber = data?.[0]?.work_order_number ?? 'New Work Order';
+    const { error: emailError } = workOrderId
+      ? await supabase.functions.invoke('send-work-order', { body: { workOrderId } })
+      : { error: new Error('The database did not return a work-order ID.') };
+
+    let emailErrorMessage = emailError?.message;
+    if (emailError instanceof FunctionsHttpError) {
+      const responseBody = await emailError.context.json().catch(() => null);
+      emailErrorMessage = responseBody?.details?.message
+        ?? responseBody?.error
+        ?? emailError.message;
+    }
+
+    Alert.alert(
+      emailError ? 'Work order saved; email failed' : 'Work order sent',
+      emailError
+        ? `#${workOrderNumber} was ${isAssignedToMe ? 'assigned' : 'offered'} to ${assigneeName}, but the email could not be delivered: ${emailErrorMessage}`
+        : `#${workOrderNumber} was ${isAssignedToMe ? 'assigned' : 'offered'} to ${assigneeName} and emailed to ${WORK_ORDER_RECIPIENT}.`,
+    );
+    setCustomerName('');
+    setCustomerPhone('');
     setAddress('');
     setDescription('');
-    setContractor('');
-    setRecipientEmail('');
-    setDeadline('');
+    setSelectedContractorId(currentContractorId);
   };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
+        contentInsetAdjustmentBehavior="automatic">
+        <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.header} contentFit="cover">
           <View>
             <Text style={styles.kicker}>MARTY WRIGHT</Text>
-            <Text style={styles.title}>New work order</Text>
+            <Text style={styles.title}>New Work Order</Text>
           </View>
           <View style={styles.headerIcon}>
-            <Ionicons name="create-outline" size={22} color={NAVY} />
+            <Ionicons name="create-outline" size={22} color={PAPER} />
           </View>
-        </View>
+        </ImageBackground>
 
-        <Text style={styles.intro}>Create an assignment and choose where the work-order email should go.</Text>
+        <Text style={styles.intro}>Enter the customer and work-order details below.</Text>
 
-        <Field label="Work order title *" value={title} onChangeText={setTitle} placeholder="Example: Final home inspection" />
-        <Field label="Property address *" value={address} onChangeText={setAddress} placeholder="Street, city, state" />
-        <Field label="Work description *" value={description} onChangeText={setDescription} placeholder="Describe the work needed" multiline />
-        <Field label="Assigned contractor" value={contractor} onChangeText={setContractor} placeholder="Name, ID, or phone number" />
-        <Field label="Email work order to *" value={recipientEmail} onChangeText={setRecipientEmail} placeholder="office@example.com" keyboardType="email-address" autoCapitalize="none" />
-        <Field label="Completion deadline" value={deadline} onChangeText={setDeadline} placeholder="Example: August 25, 2026" />
+        <Field label="Customer *" value={customerName} onChangeText={setCustomerName} placeholder="Customer name" />
+        <Field label="Customer phone number *" value={customerPhone} onChangeText={setCustomerPhone} placeholder="(555) 555-5555" keyboardType="phone-pad" />
+        <Field label="Customer address *" value={address} onChangeText={setAddress} placeholder="Street, city, state" />
+        <Field label="Work order description *" value={description} onChangeText={setDescription} placeholder="Describe the work needed" multiline />
 
-        <Text style={styles.label}>Priority</Text>
-        <View style={styles.priorityRow}>
-          {priorities.map((option) => (
-            <TouchableOpacity
-              key={option}
-              style={[styles.priorityOption, priority === option && styles.priorityOptionSelected]}
-              onPress={() => setPriority(option)}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: priority === option }}>
-              <Text style={[styles.priorityText, priority === option && styles.priorityTextSelected]}>{option}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Assign to contractor</Text>
+          <TouchableOpacity
+            style={styles.dropdownButton}
+            onPress={() => setIsContractorListOpen((open) => !open)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: isContractorListOpen }}>
+            <Text style={[styles.dropdownText, !selectedContractorId && styles.dropdownPlaceholder]}>
+              {selectedContractorId === currentContractorId
+                ? 'Me'
+                : contractors.find((contractor) => contractor.id === selectedContractorId)?.full_name ?? 'Me'}
+            </Text>
+            <Ionicons name={isContractorListOpen ? 'chevron-up' : 'chevron-down'} size={18} color={NAVY} />
+          </TouchableOpacity>
+          {isContractorListOpen && (
+            <View style={styles.dropdownList}>
+              {contractors.length === 0 ? (
+                <Text style={styles.emptyDropdownText}>No other active contractors found.</Text>
+              ) : contractors.map((contractor) => (
+                <TouchableOpacity
+                  key={contractor.id}
+                  style={styles.dropdownOption}
+                  onPress={() => {
+                    setSelectedContractorId(contractor.id);
+                    setIsContractorListOpen(false);
+                  }}>
+                  <Text style={styles.dropdownOptionText}>{contractor.id === currentContractorId ? 'Me' : contractor.full_name}</Text>
+                  {selectedContractorId === contractor.id && <Ionicons name="checkmark" size={18} color={BLUE} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.emailNotice}>
           <Ionicons name="mail-outline" size={20} color={BLUE} />
-          <Text style={styles.emailNoticeText}>The submitted work-order details will be sent to the email above after the secure server email service is connected.</Text>
+          <Text style={styles.emailNoticeText}>Submitting automatically emails the work-order details to <Text style={styles.emailAddress}>{WORK_ORDER_RECIPIENT}</Text>.</Text>
         </View>
 
-        <TouchableOpacity style={styles.submitButton} onPress={submitWorkOrder} activeOpacity={0.85} disabled={isSubmitting}>
-          <Ionicons name="send-outline" size={20} color={NAVY} />
-          <Text style={styles.submitText}>{isSubmitting ? 'Saving work order...' : 'Create and submit work order'}</Text>
-        </TouchableOpacity>
+        <Pressable style={({ pressed }) => [styles.submitButton, pressed && styles.submitButtonPressed]} onPress={submitWorkOrder} disabled={isSubmitting}>
+          <Text style={styles.submitText}>{isSubmitting ? 'Saving work order...' : 'Create Work Order'}</Text>
+        </Pressable>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -167,7 +202,7 @@ function Field({ label, value, onChangeText, placeholder, multiline = false, key
   onChangeText: (value: string) => void;
   placeholder: string;
   multiline?: boolean;
-  keyboardType?: 'default' | 'email-address';
+  keyboardType?: 'default' | 'email-address' | 'phone-pad';
   autoCapitalize?: 'none' | 'sentences';
 }) {
   return (
@@ -189,24 +224,29 @@ function Field({ label, value, onChangeText, placeholder, multiline = false, key
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: NAVY },
+  safeArea: { flex: 1, backgroundColor: 'transparent' },
+  keyboardAvoidingView: { flex: 1, backgroundColor: '#000000' },
   content: { flexGrow: 1, backgroundColor: PAPER, paddingHorizontal: 20, paddingBottom: 35 },
   header: { backgroundColor: NAVY, marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   kicker: { color: YELLOW, fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginBottom: 8 },
   title: { color: PAPER, fontSize: 27, fontWeight: '800' },
-  headerIcon: { width: 42, height: 42, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center' },
+  headerIcon: { width: 42, height: 42, backgroundColor: '#1E67B2', alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
   intro: { color: MUTED, fontSize: 12, lineHeight: 18, marginTop: 21, marginBottom: 3 },
   fieldGroup: { marginTop: 17 },
   label: { color: INK, fontSize: 11, fontWeight: '800', marginBottom: 7 },
-  input: { borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', minHeight: 47, paddingHorizontal: 13, color: INK, fontSize: 13 },
+  input: { borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', minHeight: 47, paddingHorizontal: 13, color: INK, fontSize: 13, borderRadius: 6 },
   multilineInput: { minHeight: 94, paddingTop: 13 },
-  priorityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  priorityOption: { borderWidth: 1, borderColor: '#C9D7E5', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: PAPER },
-  priorityOptionSelected: { backgroundColor: BLUE, borderColor: BLUE },
-  priorityText: { color: MUTED, fontSize: 11, fontWeight: '700' },
-  priorityTextSelected: { color: PAPER },
-  emailNotice: { flexDirection: 'row', backgroundColor: '#EAF1F8', padding: 13, marginTop: 22, alignItems: 'flex-start' },
+  dropdownButton: { borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', minHeight: 47, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 6 },
+  dropdownText: { color: INK, fontSize: 13 },
+  dropdownPlaceholder: { color: '#8A98A8' },
+  dropdownList: { borderWidth: 1, borderTopWidth: 0, borderColor: '#C9D7E5', backgroundColor: PAPER, borderRadius: 6 },
+  dropdownOption: { minHeight: 47, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#E4EBF2', borderRadius: 6 },
+  dropdownOptionText: { color: INK, fontSize: 13, fontWeight: '600' },
+  emptyDropdownText: { color: MUTED, fontSize: 12, padding: 13 },
+  emailNotice: { flexDirection: 'row', backgroundColor: '#EAF1F8', padding: 13, marginTop: 22, alignItems: 'flex-start', borderRadius: 6 },
   emailNoticeText: { color: MUTED, fontSize: 11, lineHeight: 16, flex: 1, marginLeft: 9 },
-  submitButton: { minHeight: 52, backgroundColor: YELLOW, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 18, paddingHorizontal: 12 },
-  submitText: { color: NAVY, fontSize: 12, fontWeight: '900', marginLeft: 8 },
+  emailAddress: { color: INK, fontWeight: '900' },
+  submitButton: { minHeight: 52, backgroundColor: '#2577BB', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 18, paddingHorizontal: 12, borderRadius: 6 },
+  submitButtonPressed: { backgroundColor: '#1C1C5C' },
+  submitText: { color: PAPER, fontSize: 12, fontWeight: '900', marginLeft: 8 },
 });

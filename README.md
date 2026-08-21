@@ -466,7 +466,7 @@ CHECK_REQUEST_RECIPIENT=
 
 ## Current Status
 
-**Interactive Expo prototype in progress.** The mobile shell includes a contractor username/password login screen, branded dashboard, live Supabase queries for assigned jobs, Service, and Complete WO history, a New Work Order form that saves property/order/assignment records, and an interactive home completion checklist. Camera and document uploads, persisted checklist mutations, status submission, notifications, office administration, exports, and real work-order email delivery remain unfinished backend or workflow work.
+**Interactive Expo prototype in progress.** The mobile app includes contractor authentication and sign-out, a live assigned-job dashboard, job-detail navigation, device-map directions, persisted per-work-order checklists, job notes, private photo/invoice uploads, Service requests, completed-work-order history, contractor assignment/offers, and branded work-order email delivery. Service is intentionally limited to work orders whose kind is `service` (repair calls, parts-needed work, and service visits). Status submission, notifications, office administration, and exports remain future workflow work.
 
 ### First Recommended Build
 
