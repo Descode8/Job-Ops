@@ -23,6 +23,10 @@ For local testing, run [`seed_test_data.sql`](seed_test_data.sql) after the sche
 11. `10_completion_timestamp.sql` - records `completed_at` automatically when a work order is completed.
 12. `11_contractor_work_order_permissions.sql` - allows an active contractor to create and self-assign a work order.
 13. `12_work_order_offers.sql` - adds contractor selection and transactional Accept/Reject assignment offers.
+14. `14_work_order_file_storage.sql` - creates the private work-order upload bucket and its access policies.
+15. `15_checklist_starts_work_order.sql` - starts a work order when checklist activity begins.
+16. `16_derived_work_order_status.sql` - derives in-progress state from contractor activity.
+17. `17_finalize_work_orders.sql` - makes notes optional and adds explicit, validated contractor finalization.
 
 The schema assumes Supabase PostgreSQL because `contractors.auth_user_id` references `auth.users`. The app uses the contractor's Supabase Auth email as the username and a password for sign-in; `phone_number` remains a contractor contact field. If this is run outside Supabase, replace that foreign key with the project's authentication table.
 
@@ -43,3 +47,5 @@ If the database was already created before automatic completion timestamps were 
 If the contractor app should create work orders, run `11_contractor_work_order_permissions.sql` once. It allows an active contractor to create a property, create an order with themselves as `created_by`, and self-assign that order.
 
 Run `12_work_order_offers.sql` once to enable contractor-to-contractor offers. A recipient who accepts becomes the assignee; a recipient who rejects assigns the work order back to its sender.
+
+Run `17_finalize_work_orders.sql` after the earlier migrations. A work order can then be finalized only when every active checklist item is checked, a supported job image is attached, and the invoice is a PDF. Job notes are optional.

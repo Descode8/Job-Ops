@@ -35,7 +35,7 @@ export default function JobsScreen() {
     if (!authData.user) { setJobs([]); setIsLoading(false); return; }
     const { data: contractor } = await supabase.from('contractors').select('id').eq('auth_user_id', authData.user.id).eq('is_active', true).single();
     if (!contractor) { setJobs([]); setIsLoading(false); return; }
-    const { data: assignments } = await supabase.from('work_order_assignments').select('work_order:work_orders(id, work_order_number, title, status, deadline_at, properties(customer_name, address_line_1, city, state))').eq('contractor_id', contractor.id).is('unassigned_at', null);
+    const { data: assignments } = await supabase.from('work_order_assignments').select('work_order:work_orders!inner(id, work_order_number, title, status, deadline_at, kind, properties(customer_name, address_line_1, city, state))').eq('contractor_id', contractor.id).is('unassigned_at', null).neq('work_order.kind', 'service');
     setJobs((assignments ?? []).map((assignment) => assignment.work_order).filter(Boolean) as unknown as WorkOrder[]);
     setIsLoading(false);
   }, []);

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image, ImageBackground } from 'expo-image';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,18 +14,13 @@ const PAPER = '#FFFFFF';
 const INK = '#172033';
 const MUTED = '#566273';
 
-type ChecklistItem = { id: number; label: string };
-
 export default function HomeScreen() {
   const router = useRouter();
   const [contractorName, setContractorName] = useState('');
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [pendingOffers, setPendingOffers] = useState<WorkOrderOffer[]>([]);
   const [respondingOfferId, setRespondingOfferId] = useState<string | null>(null);
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
-  const [completedChecklist, setCompletedChecklist] = useState<number[]>([]);
   const [currentWorkOrderIndex, setCurrentWorkOrderIndex] = useState(0);
-  const [contractorId, setContractorId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   const loadDashboard = useCallback(async () => {
@@ -48,7 +43,6 @@ export default function HomeScreen() {
       }
 
       setContractorName(contractor.full_name);
-      setContractorId(contractor.id);
       const [{ data: assignments }, { data: offers, error: offersError }] = await Promise.all([
         supabase
           .from('work_order_assignments')
@@ -86,37 +80,6 @@ export default function HomeScreen() {
   const firstName = contractorName.split(' ')[0] || 'Contractor';
   const avatarInitials = contractorName.split(' ').filter(Boolean).map((name) => name[0]).join('').slice(0, 2).toUpperCase() || 'CT';
   const greeting = new Date().getHours() < 12 ? 'Good Morning' : new Date().getHours() < 18 ? 'Good Afternoon' : 'Good Evening';
-
-  useEffect(() => {
-    const loadChecklist = async () => {
-      if (!currentWorkOrder) { setChecklistItems([]); setCompletedChecklist([]); return; }
-      const [{ data: items }, { data: state }] = await Promise.all([
-        supabase.from('home_checklist_items').select('id, label').eq('is_active', true).order('sort_order'),
-        supabase.from('work_order_checklist').select('checklist_item_id, is_complete').eq('work_order_id', currentWorkOrder.id),
-      ]);
-      setChecklistItems((items ?? []) as ChecklistItem[]);
-      setCompletedChecklist((state ?? []).filter((row) => row.is_complete).map((row) => row.checklist_item_id));
-    };
-    void loadChecklist();
-  }, [currentWorkOrder]);
-
-  const toggleChecklistItem = async (itemId: number) => {
-    if (!currentWorkOrder || !contractorId) return;
-    const isComplete = !completedChecklist.includes(itemId);
-    setCompletedChecklist((current) => isComplete ? [...current, itemId] : current.filter((id) => id !== itemId));
-    const { error } = await supabase.rpc('set_work_order_checklist_item', {
-      p_work_order_id: currentWorkOrder.id,
-      p_checklist_item_id: itemId,
-      p_is_complete: isComplete,
-    });
-    if (error) {
-      setCompletedChecklist((current) => isComplete ? current.filter((id) => id !== itemId) : [...current, itemId]);
-      Alert.alert('Checklist was not saved', error.message);
-    } else {
-      const { data: nextStatus } = await supabase.rpc('refresh_work_order_status', { p_work_order_id: currentWorkOrder.id });
-      if (nextStatus) setWorkOrders((orders) => orders.map((order) => order.id === currentWorkOrder.id ? { ...order, status: nextStatus } : order));
-    }
-  };
 
   const openDirections = async () => {
     if (!currentWorkOrder?.properties) return;
@@ -256,42 +219,13 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>}
 
-        {currentWorkOrder && <View style={styles.checklistCard}>
-          <View style={styles.checklistHeader}>
-            <View>
-              <Text style={styles.checklistEyebrow}>{formatAddress(currentWorkOrder.properties).toUpperCase()}</Text>
-              <Text style={styles.checklistTitle}>Home Completion Checklist</Text>
-            </View>
-            <Text style={styles.checklistCount}>{completedChecklist.length}/{checklistItems.length}</Text>
-          </View>
-          <Text style={styles.checklistHelp}>Mark each item as it is verified at the home.</Text>
-          <View style={styles.checklistGrid}>
-            {checklistItems.map((item) => {
-              const isComplete = completedChecklist.includes(item.id);
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.checklistItem}
-                  onPress={() => void toggleChecklistItem(item.id)}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: isComplete }}>
-                  <View style={[styles.checkbox, isComplete && styles.checkboxComplete]}>
-                    {isComplete && <Ionicons name="checkmark" size={14} color={PAPER} />}
-                  </View>
-                  <Text style={[styles.checklistLabel, isComplete && styles.checklistLabelComplete]}>{item.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>}
-
         <View style={styles.sectionHeading}>
           <Text style={styles.sectionTitle}>Quick actions</Text>
         </View>
         <View style={styles.actionGrid}>
           <ActionButton icon="camera-outline" label="Upload Photos" onPress={() => currentWorkOrder && router.push({ pathname: '/work-order/[id]', params: { id: currentWorkOrder.id, action: 'photos' } })} disabled={!currentWorkOrder} />
           <ActionButton icon="document-text-outline" label="Add Job Note" onPress={() => currentWorkOrder && router.push({ pathname: '/work-order/[id]', params: { id: currentWorkOrder.id, action: 'note' } })} disabled={!currentWorkOrder} />
-          <ActionButton icon="navigate-outline" label="Open Directions" onPress={() => void openDirections()} disabled={!currentWorkOrder} />
+          <ActionButton icon="navigate-outline" label="Start Navigation" onPress={() => void openDirections()} disabled={!currentWorkOrder} />
           <ActionButton icon="receipt-outline" label="Upload Invoice" onPress={() => currentWorkOrder && router.push({ pathname: '/work-order/[id]', params: { id: currentWorkOrder.id, action: 'invoice' } })} disabled={!currentWorkOrder} />
         </View>
 
@@ -414,16 +348,4 @@ const styles = StyleSheet.create({
   tipCopy: { flex: 1 },
   tipTitle: { color: INK, fontSize: 12, fontWeight: '800', marginBottom: 4 },
   tipText: { color: '#5E5E58', fontSize: 11, lineHeight: 16 },
-  checklistCard: { backgroundColor: '#F4F8FC', borderWidth: 1, borderColor: '#D7E1EC', padding: 17, marginTop: 26, borderRadius: 6 },
-  checklistHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  checklistEyebrow: { color: BLUE, fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 6 },
-  checklistTitle: { color: INK, fontSize: 17, fontWeight: '800' },
-  checklistCount: { color: BLUE, fontSize: 16, fontWeight: '900' },
-  checklistHelp: { color: MUTED, fontSize: 11, lineHeight: 16, marginTop: 8, marginBottom: 14 },
-  checklistGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  checklistItem: { width: '47%', flexDirection: 'row', alignItems: 'center', minHeight: 28 },
-  checkbox: { width: 20, height: 20, borderWidth: 1, borderColor: '#9FB3C8', alignItems: 'center', justifyContent: 'center', marginRight: 8, backgroundColor: PAPER, borderRadius: 6 },
-  checkboxComplete: { backgroundColor: BLUE, borderColor: BLUE },
-  checklistLabel: { color: INK, fontSize: 11, flex: 1 },
-  checklistLabelComplete: { color: MUTED, textDecorationLine: 'line-through' },
 });

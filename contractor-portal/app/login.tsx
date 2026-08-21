@@ -72,7 +72,7 @@ export default function LoginScreen() {
             <Ionicons name="shield-checkmark-outline" size={19} color={BLUE} />
             <Text style={styles.accessText}>CONTRACTORS ONLY</Text>
           </View>
-          <Text style={styles.title}>Log in</Text>
+          <Text style={styles.title}>Log In</Text>
           <Text style={styles.subtitle}>Use the email address associated with your contractor account as your username.</Text>
 
           <Text style={styles.label}>Username</Text>
@@ -116,7 +116,7 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: 'transparent' },
+  safeArea: { flex: 1, backgroundColor: PAPER },
   flex: { flex: 1 },
   hero: { minHeight: 150, paddingHorizontal: 22, paddingTop: 15, paddingBottom: 15, justifyContent: 'space-between' },
   logo: { width: 190, height: 88, alignSelf: 'flex-start' },
