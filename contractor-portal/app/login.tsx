@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Image, ImageBackground, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -27,7 +28,33 @@ export default function LoginScreen() {
     }
 
     setIsLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email: username.trim().toLowerCase(), password });
+    const identifier = username.trim().toLowerCase();
+    const phoneDigits = identifier.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+    if (!identifier.includes('@') && phoneDigits.length !== 10) {
+      setIsLoading(false);
+      Alert.alert('Invalid username', 'Enter your email address or 10-digit phone number without +1.');
+      return;
+    }
+    let data: { user: { id: string } | null } = { user: null };
+    let error: { message: string } | null = null;
+    if (identifier.includes('@')) {
+      const result = await supabase.auth.signInWithPassword({ email: identifier, password });
+      data = result.data; error = result.error;
+    } else {
+      const result = await supabase.functions.invoke('phone-login', { body: { phone: phoneDigits, password } });
+      if (result.error) {
+        let message = result.error.message;
+        if (result.error instanceof FunctionsHttpError) {
+          const body = await result.error.context.json().catch(() => null);
+          message = body?.message ?? body?.error ?? message;
+        }
+        error = { message };
+      } else if (result.data?.error) error = { message: result.data.error };
+      else {
+        const sessionResult = await supabase.auth.setSession({ access_token: result.data.accessToken, refresh_token: result.data.refreshToken });
+        data = { user: sessionResult.data.user }; error = sessionResult.error;
+      }
+    }
 
     if (error || !data.user) {
       setIsLoading(false);
@@ -35,9 +62,9 @@ export default function LoginScreen() {
       return;
     }
 
-    const { error: contractorError } = await supabase
+    const { data: contractor, error: contractorError } = await supabase
       .from('contractors')
-      .select('id')
+      .select('id, must_change_password')
       .eq('auth_user_id', data.user.id)
       .eq('is_active', true)
       .single();
@@ -49,7 +76,7 @@ export default function LoginScreen() {
       return;
     }
 
-    router.replace('/(tabs)');
+    router.replace(contractor?.must_change_password ? '/set-password' : '/(tabs)');
   };
 
   return (
@@ -74,14 +101,14 @@ export default function LoginScreen() {
             <Text style={styles.accessText}>CONTRACTORS ONLY</Text>
           </View>
           <Text style={styles.title}>Log In</Text>
-          <Text style={styles.subtitle}>Use the email address associated with your contractor account as your username.</Text>
+          <Text style={styles.subtitle}>Use your email address or 10-digit cell phone number as your username.</Text>
 
           <Text style={styles.label}>Username</Text>
           <TextInput
             style={styles.input}
             value={username}
             onChangeText={setUsername}
-            placeholder="Enter your email"
+            placeholder="Email or 10-digit Phone Number"
             placeholderTextColor="#8A98A8"
             keyboardType="email-address"
             autoCapitalize="none"

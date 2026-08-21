@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image, ImageBackground } from 'expo-image';
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '@/lib/supabase';
@@ -17,8 +17,13 @@ const MUTED = '#566273';
 export default function HomeScreen() {
   const router = useRouter();
   const [contractorName, setContractorName] = useState('');
+  const [contractorId, setContractorId] = useState('');
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [pendingOffers, setPendingOffers] = useState<WorkOrderOffer[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notificationLog, setNotificationLog] = useState<AppNotification[]>([]);
+  const [isNotificationLogOpen, setIsNotificationLogOpen] = useState(false);
+  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const [respondingOfferId, setRespondingOfferId] = useState<string | null>(null);
   const [currentWorkOrderIndex, setCurrentWorkOrderIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,13 +48,15 @@ export default function HomeScreen() {
       }
 
       setContractorName(contractor.full_name);
-      const [{ data: assignments }, { data: offers, error: offersError }] = await Promise.all([
+      setContractorId(contractor.id);
+      const [{ data: assignments }, { data: offers, error: offersError }, { data: notices }] = await Promise.all([
         supabase
           .from('work_order_assignments')
           .select('work_order:work_orders(id, work_order_number, title, description, status, priority, deadline_at, properties(customer_name, address_line_1, city, state))')
           .eq('contractor_id', contractor.id)
           .is('unassigned_at', null),
         supabase.rpc('get_pending_work_order_offers'),
+        supabase.from('notifications').select('id, title, message, created_at, read_at').eq('contractor_id', contractor.id).is('read_at', null).order('created_at', { ascending: false }).limit(10),
       ]);
 
       const orders = (assignments ?? [])
@@ -57,6 +64,11 @@ export default function HomeScreen() {
         .filter(Boolean) as unknown as WorkOrder[];
       setWorkOrders(orders);
       if (!offersError) setPendingOffers((offers ?? []) as WorkOrderOffer[]);
+      const unreadNotices = (notices ?? []) as AppNotification[];
+      setNotifications(unreadNotices);
+      if (unreadNotices.length) {
+        await supabase.from('notifications').update({ read_at: new Date().toISOString() }).in('id', unreadNotices.map((notice) => notice.id));
+      }
       setIsLoading(false);
   }, []);
 
@@ -90,6 +102,7 @@ export default function HomeScreen() {
   };
 
   const signOut = async () => {
+    setIsHeaderMenuOpen(false);
     await supabase.auth.signOut();
     router.replace('/login');
   };
@@ -116,14 +129,58 @@ export default function HomeScreen() {
     await loadDashboard();
   };
 
+  const openNotificationLog = async () => {
+    if (!contractorId) return;
+    const { data, error } = await supabase.from('notifications').select('id, title, message, created_at, read_at').eq('contractor_id', contractorId).order('created_at', { ascending: false });
+    if (error) { Alert.alert('Could not load notification history', error.message); return; }
+    setNotificationLog((data ?? []) as AppNotification[]);
+    setIsNotificationLogOpen(true);
+  };
+
+  const deleteNotification = async (notificationId: string) => {
+    const { error } = await supabase.from('notifications').delete().eq('id', notificationId);
+    if (error) { Alert.alert('Could not clear notification', error.message); return; }
+    setNotificationLog((current) => current.filter((item) => item.id !== notificationId));
+    setNotifications((current) => current.filter((item) => item.id !== notificationId));
+  };
+
+  const clearAllNotifications = () => {
+    if (!contractorId || notificationLog.length === 0) return;
+    Alert.alert('Clear notification history?', 'All of your notifications will be permanently removed.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear all', style: 'destructive', onPress: async () => {
+        const { error } = await supabase.from('notifications').delete().eq('contractor_id', contractorId);
+        if (error) { Alert.alert('Could not clear notifications', error.message); return; }
+        setNotificationLog([]);
+        setNotifications([]);
+      } },
+    ]);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.topBar} contentFit="cover">
           <Image source={require('@/assets/images/Marty-Wright-Home-Sales_anderson.png')} style={styles.logo} contentFit="contain" />
-          <TouchableOpacity style={styles.notificationButton} accessibilityLabel="Sign out" onPress={() => void signOut()}>
-            <Ionicons name="log-out-outline" size={22} color={PAPER} />
+          <TouchableOpacity
+            style={styles.notificationButton}
+            accessibilityLabel="Open menu"
+            accessibilityRole="button"
+            accessibilityState={{ expanded: isHeaderMenuOpen }}
+            onPress={(event) => {
+              event.stopPropagation();
+              setIsHeaderMenuOpen((isOpen) => !isOpen);
+            }}>
+            <Ionicons name="menu" size={28} color={YELLOW} />
           </TouchableOpacity>
+          {isHeaderMenuOpen && (
+            <View style={styles.headerMenu}>
+              <TouchableOpacity style={styles.headerMenuItem} onPress={() => void signOut()} accessibilityRole="menuitem">
+                <Ionicons name="log-out-outline" size={19} color={NAVY} />
+                <Text style={styles.headerMenuText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </ImageBackground>
 
         <View style={styles.greetingRow}>
@@ -229,16 +286,26 @@ export default function HomeScreen() {
           <ActionButton icon="receipt-outline" label="Upload Invoice" onPress={() => currentWorkOrder && router.push({ pathname: '/work-order/[id]', params: { id: currentWorkOrder.id, action: 'invoice' } })} disabled={!currentWorkOrder} />
         </View>
 
-        <View style={styles.tipCard}>
-          <View style={styles.tipIcon}>
-            <Ionicons name="checkmark" size={20} color={INK} />
-          </View>
-          <View style={styles.tipCopy}>
-            <Text style={styles.tipTitle}>Keep your job updates current</Text>
-            <Text style={styles.tipText}>A quick note or photo helps the office keep every project moving.</Text>
+        <View style={styles.notificationHeading}>
+          <Text style={styles.sectionTitle}>Notifications</Text>
+          <TouchableOpacity onPress={() => void openNotificationLog()}><Text style={styles.linkText}>View All</Text></TouchableOpacity>
+        </View>
+        {notifications.length > 0
+          ? notifications.map((item) => <View key={item.id} style={[styles.noticeCard, styles.noticeUnread]}><Ionicons name="notifications" size={19} color={BLUE} /><View style={styles.noticeCopy}><Text style={styles.noticeTitle}>{item.title}</Text><Text style={styles.noticeMessage}>{item.message}</Text><Text style={styles.noticeDate}>{new Date(item.created_at).toLocaleString()}</Text></View></View>)
+          : <View style={styles.noNotifications}><Ionicons name="notifications-off-outline" size={21} color={MUTED} /><Text style={styles.noNotificationsText}>No new notifications.</Text></View>}
+      </ScrollView>
+      <Modal visible={isNotificationLogOpen} transparent animationType="fade" onRequestClose={() => setIsNotificationLogOpen(false)} statusBarTranslucent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.notificationModal}>
+            <View style={styles.modalHeader}><View><Text style={styles.modalTitle}>Notification Log</Text><Text style={styles.modalSubtitle}>NEWEST TO OLDEST</Text></View><TouchableOpacity style={styles.modalClose} onPress={() => setIsNotificationLogOpen(false)} accessibilityLabel="Close notification log"><Ionicons name="close" size={24} color={PAPER} /></TouchableOpacity></View>
+            <View style={styles.logToolbar}><Text style={styles.logCount}>{notificationLog.length} NOTIFICATION{notificationLog.length === 1 ? '' : 'S'}</Text><TouchableOpacity onPress={clearAllNotifications} disabled={!notificationLog.length}><Text style={[styles.clearAllText, !notificationLog.length && styles.clearDisabled]}>Clear All</Text></TouchableOpacity></View>
+            <ScrollView contentContainerStyle={styles.logContent}>
+              {notificationLog.map((item) => <View key={item.id} style={styles.logItem}><View style={styles.logIcon}><Ionicons name="notifications-outline" size={19} color={BLUE} /></View><View style={styles.logCopy}><Text style={styles.logTitle}>{item.title}</Text><Text style={styles.logMessage}>{item.message}</Text><Text style={styles.logDate}>{new Date(item.created_at).toLocaleString()}</Text></View><TouchableOpacity style={styles.clearOneButton} onPress={() => void deleteNotification(item.id)} accessibilityLabel={`Clear ${item.title}`}><Ionicons name="trash-outline" size={18} color="#B3261E" /></TouchableOpacity></View>)}
+              {notificationLog.length === 0 && <View style={styles.emptyLog}><Ionicons name="file-tray-outline" size={30} color={MUTED} /><Text style={styles.emptyLogText}>Notification history is empty.</Text></View>}
+            </ScrollView>
           </View>
         </View>
-      </ScrollView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -261,6 +328,7 @@ type WorkOrder = {
   deadline_at: string | null;
   properties: { customer_name: string | null; address_line_1: string; city: string; state: string } | null;
 };
+type AppNotification = { id: string; title: string; message: string; created_at: string; read_at: string | null };
 
 type WorkOrderOffer = {
   offer_id: string;
@@ -281,7 +349,7 @@ function formatAddress(property: WorkOrder['properties']) {
 }
 
 function formatDeadline(deadline: string | null) {
-  if (!deadline) return 'No deadline set';
+  if (!deadline) return 'No Deadline Set';
   return `Due ${new Date(deadline).toLocaleDateString()}`;
 }
 
@@ -295,9 +363,12 @@ function statusColor(status: string) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: 'transparent' },
   content: { paddingHorizontal: 20, paddingBottom: 32, backgroundColor: PAPER },
-  topBar: { height: 105, marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 17, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  topBar: { height: 105, marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 17, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 },
   logo: { width: 164, height: 76 },
-  notificationButton: { width: 42, height: 42, backgroundColor: '#1E67B2', alignItems: 'center', justifyContent: 'center', position: 'relative', borderRadius: 6 },
+  notificationButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  headerMenu: { position: 'absolute', right: 20, top: 78, minWidth: 150, backgroundColor: PAPER, borderWidth: 1, borderColor: '#D7E1EC', borderRadius: 6, zIndex: 10, elevation: 5, shadowColor: '#000000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  headerMenuItem: { minHeight: 48, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerMenuText: { color: NAVY, fontSize: 13, fontWeight: '800' },
   notificationDot: { position: 'absolute', right: 9, top: 8, width: 6, height: 6, backgroundColor: YELLOW, borderRadius: 6 },
   offersSection: { marginBottom: 20 },
   offerHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
@@ -316,6 +387,10 @@ const styles = StyleSheet.create({
   greetingRow: { paddingTop: 27, paddingBottom: 21, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   eyebrow: { color: MUTED, fontSize: 10, fontWeight: '700', letterSpacing: 1.3, marginBottom: 7 },
   greeting: { color: INK, fontSize: 25, fontWeight: '800' },
+  noticesSection: { marginBottom: 20 },
+  noticeCard: { flexDirection: 'row', backgroundColor: PAPER, borderWidth: 1, borderColor: '#D7E1EC', padding: 13, marginTop: 9, borderRadius: 6 },
+  noticeUnread: { borderLeftWidth: 4, borderLeftColor: BLUE, backgroundColor: '#F4F9FE' },
+  noticeCopy: { flex: 1, marginLeft: 10 }, noticeTitle: { color: INK, fontSize: 12, fontWeight: '900' }, noticeMessage: { color: MUTED, fontSize: 11, lineHeight: 16, marginTop: 3 }, noticeDate: { color: '#7C8997', fontSize: 8, marginTop: 5 },
   avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: INK, fontSize: 14, fontWeight: '800' },
   summaryCard: { backgroundColor: NAVY, padding: 18, minHeight: 135, borderRadius: 6 },
@@ -343,6 +418,29 @@ const styles = StyleSheet.create({
   actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   actionButton: { backgroundColor: '#FFFFFF', width: '48%', minHeight: 94, padding: 15, justifyContent: 'space-between', borderWidth: 1, borderColor: '#D7E1EC', borderRadius: 6 },
   actionLabel: { color: INK, fontSize: 12, fontWeight: '800', maxWidth: 100 },
+  notificationHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 28, marginBottom: 4 },
+  noNotifications: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, backgroundColor: '#F4F7FA', borderWidth: 1, borderColor: '#D7E1EC', borderRadius: 6, marginTop: 9 },
+  noNotificationsText: { color: MUTED, fontSize: 11, fontWeight: '700' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(8, 19, 34, 0.78)', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  notificationModal: { width: '100%', maxWidth: 720, height: '82%', backgroundColor: PAPER, borderRadius: 10, overflow: 'hidden' },
+  modalHeader: { minHeight: 68, paddingLeft: 17, backgroundColor: NAVY, flexDirection: 'row', alignItems: 'center' },
+  modalTitle: { color: PAPER, fontSize: 18, fontWeight: '900' },
+  modalSubtitle: { color: YELLOW, fontSize: 8, fontWeight: '900', letterSpacing: 1, marginTop: 4 },
+  modalClose: { width: 62, minHeight: 68, marginLeft: 'auto', alignItems: 'center', justifyContent: 'center' },
+  logToolbar: { minHeight: 50, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#D7E1EC', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  logCount: { color: MUTED, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
+  clearAllText: { color: '#B3261E', fontSize: 11, fontWeight: '900' },
+  clearDisabled: { opacity: 0.4 },
+  logContent: { flexGrow: 1, padding: 16 },
+  logItem: { minHeight: 76, flexDirection: 'row', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: '#E2EAF2', paddingVertical: 12 },
+  logIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#EAF3FB', alignItems: 'center', justifyContent: 'center' },
+  logCopy: { flex: 1, marginLeft: 11 },
+  logTitle: { color: INK, fontSize: 12, fontWeight: '900' },
+  logMessage: { color: MUTED, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  logDate: { color: '#7C8997', fontSize: 8, marginTop: 5 },
+  clearOneButton: { width: 42, minHeight: 42, alignItems: 'center', justifyContent: 'center' },
+  emptyLog: { flex: 1, minHeight: 260, alignItems: 'center', justifyContent: 'center' },
+  emptyLogText: { color: MUTED, fontSize: 12, marginTop: 10 },
   tipCard: { flexDirection: 'row', backgroundColor: '#EAF1F8', padding: 15, marginTop: 26, alignItems: 'center', borderRadius: 6 },
   tipIcon: { width: 36, height: 36, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center', marginRight: 12, borderRadius: 6 },
   tipCopy: { flex: 1 },

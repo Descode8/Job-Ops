@@ -45,7 +45,7 @@ export default function JobsScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.header} contentFit="cover"><View><Text style={styles.kicker}>MARTY WRIGHT</Text><Text style={styles.title}>Assigned Jobs</Text></View><TouchableOpacity style={styles.filterButton} accessibilityLabel="Toggle completed jobs" onPress={() => setShowCompleted((value) => !value)}><Ionicons name={showCompleted ? 'checkmark-done' : 'options-outline'} size={21} color={PAPER} /></TouchableOpacity></ImageBackground>
+        <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.header} contentFit="cover"><View><Text style={styles.kicker}>MARTY WRIGHT</Text><Text style={styles.title}>Assigned Jobs</Text></View><TouchableOpacity style={[styles.filterButton, { backgroundColor: 'transparent', borderRadius: 0 }]} accessibilityLabel="Toggle completed jobs" onPress={() => setShowCompleted((value) => !value)}><Ionicons name={showCompleted ? 'checkmark-done' : 'options-outline'} size={28} color={YELLOW} /></TouchableOpacity></ImageBackground>
         <Text style={styles.resultCount}>{isLoading ? 'LOADING...' : `${jobs.filter((job) => showCompleted || job.status !== 'completed').length} ${showCompleted ? 'TOTAL' : 'ACTIVE'} JOB${jobs.length === 1 ? '' : 'S'}`}</Text>
         {!isLoading && jobs.length === 0 && <EmptyState message="No assigned work orders yet." />}
         {jobs.filter((job) => showCompleted || job.status !== 'completed').map((job) => <TouchableOpacity key={job.id} style={styles.jobCard} activeOpacity={0.85} onPress={() => router.push({ pathname: '/work-order/[id]', params: { id: job.id } })}><View style={styles.cardHeader}><View style={[styles.statusDot, { backgroundColor: statusColor(job.status) }]} /><Text style={styles.status}>{job.status.replaceAll('_', ' ').toUpperCase()}</Text><Text style={styles.jobId}>#{job.work_order_number}</Text></View><Text style={styles.jobTitle}>{job.properties?.customer_name || job.title}</Text><View style={styles.addressRow}><Ionicons name="location-outline" size={17} color={MUTED} /><Text style={styles.address}>{formatAddress(job.properties)}</Text></View><View style={styles.cardFooter}><Text style={styles.due}>{formatDeadline(job.deadline_at)}</Text><Ionicons name="arrow-forward" size={18} color={NAVY} /></View></TouchableOpacity>)}
@@ -56,7 +56,7 @@ export default function JobsScreen() {
 
 function EmptyState({ message }: { message: string }) { return <View style={styles.emptyState}><Ionicons name="briefcase-outline" size={27} color={BLUE} /><Text style={styles.emptyText}>{message}</Text></View>; }
 function formatAddress(property: WorkOrder['properties']) { return property ? `${property.address_line_1}, ${property.city}, ${property.state}` : 'Address unavailable'; }
-function formatDeadline(deadline: string | null) { return deadline ? `Due ${new Date(deadline).toLocaleDateString()}` : 'No deadline set'; }
+function formatDeadline(deadline: string | null) { return deadline ? `Due ${new Date(deadline).toLocaleDateString()}` : 'No Deadline Set'; }
 function statusColor(status: string) { if (status === 'completed') return '#2E8B57'; if (status === 'in_progress') return BLUE; return '#8B97A5'; }
 
 const styles = StyleSheet.create({

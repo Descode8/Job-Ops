@@ -83,6 +83,7 @@ create or replace function public.create_and_offer_work_order(
   p_city text,
   p_state text,
   p_description text,
+  p_deadline_at timestamptz,
   p_recipient_id uuid
 )
 returns table (work_order_id uuid, work_order_number text)
@@ -127,7 +128,7 @@ begin
     deadline_at, created_by, recipient_email
   ) values (
     v_work_order_number, v_property_id, 'Work order for ' || trim(p_customer_name),
-    trim(p_description), 'other', 'medium', null, v_sender_id, 'jaden.humphries@gmail.com'
+    trim(p_description), 'other', 'medium', p_deadline_at, v_sender_id, 'jhumphries@shopmwhs.net'
   ) returning id into v_work_order_id;
 
   if p_recipient_id = v_sender_id then
@@ -227,12 +228,12 @@ $$;
 
 revoke all on function public.list_available_contractors() from public;
 revoke all on function public.create_work_order_offer(uuid, uuid) from public;
-revoke all on function public.create_and_offer_work_order(text, text, text, text, text, text, uuid) from public;
+revoke all on function public.create_and_offer_work_order(text, text, text, text, text, text, timestamptz, uuid) from public;
 revoke all on function public.get_pending_work_order_offers() from public;
 revoke all on function public.respond_to_work_order_offer(uuid, text) from public;
 
 grant execute on function public.list_available_contractors() to authenticated;
 grant execute on function public.create_work_order_offer(uuid, uuid) to authenticated;
-grant execute on function public.create_and_offer_work_order(text, text, text, text, text, text, uuid) to authenticated;
+grant execute on function public.create_and_offer_work_order(text, text, text, text, text, text, timestamptz, uuid) to authenticated;
 grant execute on function public.get_pending_work_order_offers() to authenticated;
 grant execute on function public.respond_to_work_order_offer(uuid, text) to authenticated;

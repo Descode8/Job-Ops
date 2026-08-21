@@ -37,7 +37,7 @@ export default function ServiceScreen() {
     : filter === 'urgent' ? order.priority === 'high' || order.priority === 'emergency' : true), [filter, orders]);
 
   return <SafeAreaView style={styles.safeArea} edges={['top']}><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-    <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.header} contentFit="cover"><View><Text style={styles.kicker}>MARTY WRIGHT</Text><Text style={styles.title}>Service</Text></View><Ionicons name="construct-outline" size={29} color={YELLOW} /></ImageBackground>
+    <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.header} contentFit="cover"><View><Text style={styles.kicker}>MARTY WRIGHT</Text><Text style={styles.title}>Service</Text></View><Ionicons name="construct-outline" size={28} color={YELLOW} /></ImageBackground>
     <View style={styles.summaryRow}><Summary value={orders.length} label="ACTIVE" /><Summary value={orders.filter(isUrgent).length} label="URGENT" /><Summary value={orders.filter(needsParts).length} label="NEEDS PARTS" /></View>
     <View style={styles.filters}><FilterButton label="Active" selected={filter === 'active'} onPress={() => setFilter('active')} /><FilterButton label="Needs Parts" selected={filter === 'parts'} onPress={() => setFilter('parts')} /><FilterButton label="Urgent" selected={filter === 'urgent'} onPress={() => setFilter('urgent')} /></View>
     <Text style={styles.count}>{isLoading ? 'LOADING...' : `${visibleOrders.length} ${filter.toUpperCase()} SERVICE ORDER${visibleOrders.length === 1 ? '' : 'S'}`}</Text>

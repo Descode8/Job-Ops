@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { ImageBackground } from 'expo-image';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useEffect, useState } from 'react';
@@ -22,6 +23,9 @@ export default function WorkOrderScreen() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
+  const [hasDeadline, setHasDeadline] = useState(false);
+  const [deadline, setDeadline] = useState(() => { const date = new Date(); date.setDate(date.getDate() + 7); return date; });
+  const [showCalendar, setShowCalendar] = useState(false);
   const [contractors, setContractors] = useState<ContractorOption[]>([]);
   const [currentContractorId, setCurrentContractorId] = useState('');
   const [selectedContractorId, setSelectedContractorId] = useState('');
@@ -80,6 +84,7 @@ export default function WorkOrderScreen() {
       p_city: addressParts[1] ?? 'Unknown',
       p_state: addressParts[2] ?? 'SC',
       p_description: description.trim(),
+      p_deadline_at: hasDeadline ? deadline.toISOString() : null,
       p_recipient_id: assigneeId,
     });
 
@@ -116,6 +121,8 @@ export default function WorkOrderScreen() {
     setCustomerPhone('');
     setAddress('');
     setDescription('');
+    setHasDeadline(false);
+    setShowCalendar(false);
     setSelectedContractorId(currentContractorId);
   };
 
@@ -137,19 +144,29 @@ export default function WorkOrderScreen() {
             <Text style={styles.title}>New Work Order</Text>
           </View>
           <View style={styles.headerIcon}>
-            <Ionicons name="create-outline" size={22} color={PAPER} />
+            <Ionicons name="create-outline" size={28} color={YELLOW} />
           </View>
         </ImageBackground>
 
         <Text style={styles.intro}>Enter the customer and work-order details below.</Text>
 
         <Field label="Customer *" value={customerName} onChangeText={setCustomerName} placeholder="Customer name" />
-        <Field label="Customer phone number *" value={customerPhone} onChangeText={setCustomerPhone} placeholder="(555) 555-5555" keyboardType="phone-pad" />
-        <Field label="Customer address *" value={address} onChangeText={setAddress} placeholder="Street, city, state" />
-        <Field label="Work order description *" value={description} onChangeText={setDescription} placeholder="Describe the work needed" multiline />
+        <Field label="Customer Phone Number *" value={customerPhone} onChangeText={setCustomerPhone} placeholder="(555) 555-5555" keyboardType="phone-pad" />
+        <Field label="Customer Address *" value={address} onChangeText={setAddress} placeholder="Street, city, state" />
+        <Field label="Work Order Description *" value={description} onChangeText={setDescription} placeholder="Describe the work needed" multiline />
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Assign to contractor</Text>
+          <Text style={styles.label}>Completion Deadline</Text>
+          <View style={styles.deadlineOptions}>
+            <TouchableOpacity style={[styles.deadlineOption, !hasDeadline && styles.deadlineOptionSelected]} onPress={() => { setHasDeadline(false); setShowCalendar(false); }} accessibilityRole="radio" accessibilityState={{ checked: !hasDeadline }}><Ionicons name={!hasDeadline ? 'radio-button-on' : 'radio-button-off'} size={18} color={!hasDeadline ? BLUE : MUTED} /><Text style={[styles.deadlineOptionText, !hasDeadline && styles.deadlineOptionTextSelected]}>No Deadline</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.deadlineOption, hasDeadline && styles.deadlineOptionSelected]} onPress={() => { setHasDeadline(true); setShowCalendar(true); }} accessibilityRole="radio" accessibilityState={{ checked: hasDeadline }}><Ionicons name={hasDeadline ? 'radio-button-on' : 'radio-button-off'} size={18} color={hasDeadline ? BLUE : MUTED} /><Text style={[styles.deadlineOptionText, hasDeadline && styles.deadlineOptionTextSelected]}>Set Deadline</Text></TouchableOpacity>
+          </View>
+          {hasDeadline && <TouchableOpacity style={styles.calendarButton} onPress={() => setShowCalendar((isOpen) => !isOpen)}><Ionicons name="calendar-outline" size={20} color={BLUE} /><View style={styles.calendarDateCopy}><Text style={styles.calendarLabel}>DEADLINE DATE</Text><Text style={styles.calendarDate}>{deadline.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}</Text></View><Ionicons name={showCalendar ? 'chevron-up' : 'chevron-down'} size={18} color={NAVY} /></TouchableOpacity>}
+          {hasDeadline && showCalendar && <View style={styles.datePickerSurface}><DateTimePicker value={deadline} mode="date" minimumDate={new Date()} display={Platform.OS === 'ios' ? 'inline' : 'calendar'} themeVariant="light" accentColor={BLUE} style={styles.datePicker} onChange={(event: DateTimePickerEvent, selectedDate?: Date) => { if (Platform.OS === 'android') setShowCalendar(false); if (event.type === 'set' && selectedDate) setDeadline(selectedDate); }} />{Platform.OS === 'ios' && <TouchableOpacity style={styles.calendarDone} onPress={() => setShowCalendar(false)}><Text style={styles.calendarDoneText}>Done</Text></TouchableOpacity>}</View>}
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Assign to Contractor</Text>
           <TouchableOpacity
             style={styles.dropdownButton}
             onPress={() => setIsContractorListOpen((open) => !open)}
@@ -230,12 +247,25 @@ const styles = StyleSheet.create({
   header: { backgroundColor: NAVY, marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   kicker: { color: YELLOW, fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginBottom: 8 },
   title: { color: PAPER, fontSize: 27, fontWeight: '800' },
-  headerIcon: { width: 42, height: 42, backgroundColor: '#1E67B2', alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
+  headerIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   intro: { color: MUTED, fontSize: 12, lineHeight: 18, marginTop: 21, marginBottom: 3 },
   fieldGroup: { marginTop: 17 },
   label: { color: INK, fontSize: 11, fontWeight: '800', marginBottom: 7 },
   input: { borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', minHeight: 47, paddingHorizontal: 13, color: INK, fontSize: 13, borderRadius: 6 },
   multilineInput: { minHeight: 94, paddingTop: 13 },
+  deadlineOptions: { flexDirection: 'row', gap: 9 },
+  deadlineOption: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', borderRadius: 6 },
+  deadlineOptionSelected: { borderColor: BLUE, backgroundColor: '#EAF3FB' },
+  deadlineOptionText: { color: MUTED, fontSize: 11, fontWeight: '800' },
+  deadlineOptionTextSelected: { color: NAVY },
+  calendarButton: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: PAPER, paddingHorizontal: 13, marginTop: 9, borderRadius: 6 },
+  calendarDateCopy: { flex: 1, alignSelf: 'stretch', justifyContent: 'center' },
+  calendarLabel: { color: MUTED, fontSize: 8, fontWeight: '900' },
+  calendarDate: { color: INK, fontSize: 12, fontWeight: '800', marginTop: 3 },
+  datePickerSurface: { backgroundColor: PAPER, borderWidth: 1, borderColor: '#C9D7E5', borderRadius: 8, marginTop: 9, overflow: 'hidden' },
+  datePicker: { backgroundColor: PAPER, alignSelf: 'stretch' },
+  calendarDone: { minHeight: 42, backgroundColor: '#EAF3FB', alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: '#C9D7E5' },
+  calendarDoneText: { color: BLUE, fontSize: 12, fontWeight: '900' },
   dropdownButton: { borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', minHeight: 47, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 6 },
   dropdownText: { color: INK, fontSize: 13 },
   dropdownPlaceholder: { color: '#8A98A8' },

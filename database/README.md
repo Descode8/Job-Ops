@@ -27,6 +27,14 @@ For local testing, run [`seed_test_data.sql`](seed_test_data.sql) after the sche
 15. `15_checklist_starts_work_order.sql` - starts a work order when checklist activity begins.
 16. `16_derived_work_order_status.sql` - derives in-progress state from contractor activity.
 17. `17_finalize_work_orders.sql` - makes notes optional and adds explicit, validated contractor finalization.
+18. `18_work_order_deadlines.sql` - adds optional deadlines to contractor-created work orders.
+19. `19_admin_contractors_and_offer_notifications.sql` - adds admins, contractor oversight, and offer-response notifications.
+20. `20_admin_work_order_reassignment.sql` - lets admins view and change active work-order assignments.
+21. `21_contractor_first_login.sql` - requires contractors created without email delivery to replace a temporary password.
+22. `22_hard_delete_contractors.sql` - permanently deletes non-admin contractors and removes or anonymizes their database references.
+23. `23_admin_edit_delete_work_orders.sql` - lets admins edit and delete work orders.
+24. `24_notification_history_and_admin_activity.sql` - adds notification history and admin activity notices.
+25. `25_work_order_recipient_email.sql` - routes newly created work-order emails to `jhumphries@shopmwhs.net`.
 
 The schema assumes Supabase PostgreSQL because `contractors.auth_user_id` references `auth.users`. The app uses the contractor's Supabase Auth email as the username and a password for sign-in; `phone_number` remains a contractor contact field. If this is run outside Supabase, replace that foreign key with the project's authentication table.
 

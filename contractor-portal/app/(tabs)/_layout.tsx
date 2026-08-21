@@ -1,14 +1,17 @@
 import { Tabs } from 'expo-router';
 import { ImageBackground } from 'expo-image';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { supabase } from '@/lib/supabase';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => { void (async () => { const { data: auth } = await supabase.auth.getUser(); if (!auth.user) return; const { data } = await supabase.from('contractors').select('is_admin').eq('auth_user_id', auth.user.id).eq('is_active', true).single(); setIsAdmin(Boolean(data?.is_admin)); })(); }, []);
 
   return (
     <Tabs
@@ -51,9 +54,13 @@ export default function TabLayout() {
       <Tabs.Screen
         name="completed"
         options={{
-          title: 'Complete WO',
+          title: 'Completed WO',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="checkmark.seal.fill" color={color} />,
         }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{ title: 'Admin', href: isAdmin ? undefined : null, tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.2.fill" color={color} /> }}
       />
     </Tabs>
   );
