@@ -16,6 +16,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const signIn = async () => {
@@ -26,7 +27,7 @@ export default function LoginScreen() {
     }
 
     setIsLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email: username.trim(), password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: username.trim().toLowerCase(), password });
 
     if (error || !data.user) {
       setIsLoading(false);
@@ -90,17 +91,25 @@ export default function LoginScreen() {
           />
 
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Enter your password"
-            placeholderTextColor="#8A98A8"
-            secureTextEntry
-            textContentType="password"
-            returnKeyType="done"
-            onSubmitEditing={signIn}
-          />
+          <View style={styles.passwordField}>
+            <TextInput
+              style={styles.passwordInput}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Enter your password"
+              placeholderTextColor="#8A98A8"
+              secureTextEntry={!showPassword}
+              textContentType="password"
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              returnKeyType="done"
+              onSubmitEditing={signIn}
+            />
+            <TouchableOpacity style={styles.passwordToggle} onPress={() => setShowPassword((visible) => !visible)} accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
+              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color={BLUE} />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity style={styles.primaryButton} onPress={signIn} activeOpacity={0.85} disabled={isLoading}>
             <Text style={styles.primaryButtonText}>{isLoading ? 'Logging in...' : 'Log in'}</Text>
@@ -132,6 +141,9 @@ const styles = StyleSheet.create({
   subtitle: { color: MUTED, fontSize: 13, marginTop: 6, marginBottom: 24 },
   label: { color: NAVY, fontSize: 11, fontWeight: '800', marginBottom: 7, marginTop: 15 },
   input: { minHeight: 50, borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', paddingHorizontal: 14, color: NAVY, fontSize: 15, borderRadius: 6 },
+  passwordField: { minHeight: 50, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', borderRadius: 6 },
+  passwordInput: { flex: 1, minHeight: 48, paddingHorizontal: 14, color: NAVY, fontSize: 15 },
+  passwordToggle: { width: 50, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   primaryButton: { minHeight: 52, backgroundColor: YELLOW, marginTop: 24, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 9, borderRadius: 6 },
   primaryButtonText: { color: NAVY, fontSize: 13, fontWeight: '900' },
   demoText: { color: MUTED, fontSize: 11, lineHeight: 16, marginTop: 14 },
