@@ -1,3 +1,5 @@
+## Run: npx.cmd expo start --tunnel --clear
+
 # Marty Wright Contractor Portal
 
 ## Run the App

@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image, ImageBackground } from 'expo-image';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Alert, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 
 const YELLOW = '#FFF200';
@@ -15,6 +16,8 @@ const INK = '#172033';
 const MUTED = '#566273';
 
 export default function HomeScreen() {
+  const { colorScheme, colors, toggleColorScheme } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const [contractorName, setContractorName] = useState('');
   const [contractorId, setContractorId] = useState('');
@@ -75,6 +78,7 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadDashboard();
+      return () => setIsHeaderMenuOpen(false);
     }, [loadDashboard]),
   );
 
@@ -95,7 +99,7 @@ export default function HomeScreen() {
 
   const openDirections = async () => {
     if (!currentWorkOrder?.properties) return;
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(formatAddress(currentWorkOrder.properties))}`;
+    const url = `https://maps.apple.com/?daddr=${encodeURIComponent(formatAddress(currentWorkOrder.properties))}&dirflg=d`;
     const supported = await Linking.canOpenURL(url);
     if (supported) await Linking.openURL(url);
     else Alert.alert('Could not open maps', 'No maps application is available on this device.');
@@ -161,7 +165,10 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.topBar} contentFit="cover">
-          <Image source={require('@/assets/images/Marty-Wright-Home-Sales_anderson.png')} style={styles.logo} contentFit="contain" />
+          <View style={styles.brand}>
+            <Image source={require('@/assets/images/Marty-Wright-Home-Sales_anderson.png')} style={styles.logo} contentFit="contain" />
+            <Text style={styles.brandTitle}>Project Manager</Text>
+          </View>
           <TouchableOpacity
             style={styles.notificationButton}
             accessibilityLabel="Open menu"
@@ -175,13 +182,18 @@ export default function HomeScreen() {
           </TouchableOpacity>
           {isHeaderMenuOpen && (
             <View style={styles.headerMenu}>
+              <TouchableOpacity style={styles.headerMenuItem} onPress={() => { setIsHeaderMenuOpen(false); toggleColorScheme(); }} accessibilityRole="menuitem">
+                <Ionicons name={colorScheme === 'dark' ? 'sunny-outline' : 'moon-outline'} size={19} color={colors.primaryStrong} />
+                <Text style={styles.headerMenuText}>{colorScheme === 'dark' ? 'Light Mode' : 'Dark Mode'}</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.headerMenuItem} onPress={() => void signOut()} accessibilityRole="menuitem">
-                <Ionicons name="log-out-outline" size={19} color={NAVY} />
+                <Ionicons name="log-out-outline" size={19} color={colors.primary} />
                 <Text style={styles.headerMenuText}>Logout</Text>
               </TouchableOpacity>
             </View>
           )}
         </ImageBackground>
+        {isHeaderMenuOpen && <Pressable style={styles.menuDismissLayer} onPress={() => setIsHeaderMenuOpen(false)} accessibilityLabel="Close menu" />}
 
         <View style={styles.greetingRow}>
           <View>
@@ -311,9 +323,11 @@ export default function HomeScreen() {
 }
 
 function ActionButton({ icon, label, onPress, disabled }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void; disabled?: boolean }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <TouchableOpacity style={[styles.actionButton, disabled && { opacity: 0.45 }]} activeOpacity={0.8} onPress={onPress} disabled={disabled}>
-      <Ionicons name={icon} size={24} color={BLUE} />
+      <Ionicons name={icon} size={24} color={colors.primary} />
       <Text style={styles.actionLabel}>{label}</Text>
     </TouchableOpacity>
   );
@@ -360,24 +374,27 @@ function statusColor(status: string) {
   return '#8B97A5';
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: 'transparent' },
-  content: { paddingHorizontal: 20, paddingBottom: 32, backgroundColor: PAPER },
-  topBar: { height: 105, marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 17, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 },
-  logo: { width: 164, height: 76 },
+const createStyles = (colors: AppThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: { paddingHorizontal: 20, paddingBottom: 32, backgroundColor: colors.background },
+  topBar: { height: 122, marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 15, paddingBottom: 17, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 },
+  menuDismissLayer: { ...StyleSheet.absoluteFillObject, zIndex: 9 },
+  brand: { alignItems: 'flex-start', justifyContent: 'center' },
+  logo: { width: 120, height: 43 },
+  brandTitle: { color: PAPER, fontSize: 28, fontWeight: '800', marginTop: 3 },
   notificationButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  headerMenu: { position: 'absolute', right: 20, top: 78, minWidth: 150, backgroundColor: PAPER, borderWidth: 1, borderColor: '#D7E1EC', borderRadius: 6, zIndex: 10, elevation: 5, shadowColor: '#000000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  headerMenu: { position: 'absolute', right: 20, top: 78, minWidth: 170, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, borderRadius: 6, zIndex: 10, elevation: 5, shadowColor: '#000000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
   headerMenuItem: { minHeight: 48, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerMenuText: { color: NAVY, fontSize: 13, fontWeight: '800' },
+  headerMenuText: { color: colors.text, fontSize: 13, fontWeight: '800' },
   notificationDot: { position: 'absolute', right: 9, top: 8, width: 6, height: 6, backgroundColor: YELLOW, borderRadius: 6 },
   offersSection: { marginBottom: 20 },
   offerHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  offerHeading: { color: NAVY, fontSize: 10, fontWeight: '900', letterSpacing: 0.7, flex: 1 },
-  offerCard: { borderWidth: 2, borderColor: YELLOW, backgroundColor: '#FFFDE5', padding: 16, marginBottom: 10, borderRadius: 6 },
+  offerHeading: { color: colors.text, fontSize: 10, fontWeight: '900', letterSpacing: 0.7, flex: 1 },
+  offerCard: { borderWidth: 2, borderColor: YELLOW, backgroundColor: colors.surfaceElevated, padding: 16, marginBottom: 10, borderRadius: 6 },
   offerNumber: { color: BLUE, fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
-  offerTitle: { color: INK, fontSize: 18, fontWeight: '800', marginTop: 8 },
-  offerMeta: { color: MUTED, fontSize: 11, lineHeight: 17, marginTop: 3 },
-  offerDescription: { color: INK, fontSize: 12, lineHeight: 18, marginTop: 10 },
+  offerTitle: { color: colors.text, fontSize: 18, fontWeight: '800', marginTop: 8 },
+  offerMeta: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 3 },
+  offerDescription: { color: colors.text, fontSize: 12, lineHeight: 18, marginTop: 10 },
   offerActions: { flexDirection: 'row', gap: 10, marginTop: 15 },
   offerButton: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
   rejectButton: { borderWidth: 1, borderColor: NAVY, backgroundColor: PAPER },
@@ -385,12 +402,12 @@ const styles = StyleSheet.create({
   rejectButtonText: { color: NAVY, fontSize: 12, fontWeight: '900' },
   acceptButtonText: { color: PAPER, fontSize: 12, fontWeight: '900' },
   greetingRow: { paddingTop: 27, paddingBottom: 21, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  eyebrow: { color: MUTED, fontSize: 10, fontWeight: '700', letterSpacing: 1.3, marginBottom: 7 },
-  greeting: { color: INK, fontSize: 25, fontWeight: '800' },
+  eyebrow: { color: colors.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1.3, marginBottom: 7 },
+  greeting: { color: colors.text, fontSize: 25, fontWeight: '800' },
   noticesSection: { marginBottom: 20 },
-  noticeCard: { flexDirection: 'row', backgroundColor: PAPER, borderWidth: 1, borderColor: '#D7E1EC', padding: 13, marginTop: 9, borderRadius: 6 },
-  noticeUnread: { borderLeftWidth: 4, borderLeftColor: BLUE, backgroundColor: '#F4F9FE' },
-  noticeCopy: { flex: 1, marginLeft: 10 }, noticeTitle: { color: INK, fontSize: 12, fontWeight: '900' }, noticeMessage: { color: MUTED, fontSize: 11, lineHeight: 16, marginTop: 3 }, noticeDate: { color: '#7C8997', fontSize: 8, marginTop: 5 },
+  noticeCard: { flexDirection: 'row', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 13, marginTop: 9, borderRadius: 6 },
+  noticeUnread: { borderLeftWidth: 4, borderLeftColor: colors.primary, backgroundColor: colors.surfaceMuted },
+  noticeCopy: { flex: 1, marginLeft: 10 }, noticeTitle: { color: colors.text, fontSize: 12, fontWeight: '900' }, noticeMessage: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 3 }, noticeDate: { color: colors.textMuted, fontSize: 8, marginTop: 5 },
   avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: INK, fontSize: 14, fontWeight: '800' },
   summaryCard: { backgroundColor: NAVY, padding: 18, minHeight: 135, borderRadius: 6 },
@@ -401,7 +418,7 @@ const styles = StyleSheet.create({
   summaryText: { color: PAPER, fontSize: 10, fontWeight: '600', marginTop: 2 },
   summaryDivider: { height: 42, width: 1, backgroundColor: '#4775A7' },
   sectionHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 28, marginBottom: 13 },
-  sectionTitle: { color: INK, fontSize: 18, fontWeight: '800' },
+  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: '800' },
   linkText: { color: BLUE, fontSize: 12, fontWeight: '800' },
   jobCard: { backgroundColor: NAVY, padding: 18, borderRadius: 6 },
   jobTopLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -416,34 +433,34 @@ const styles = StyleSheet.create({
   jobMeta: { color: '#A6A6A0', fontSize: 11, fontWeight: '600' },
   arrowButton: { backgroundColor: BLUE, width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
   actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  actionButton: { backgroundColor: '#FFFFFF', width: '48%', minHeight: 94, padding: 15, justifyContent: 'space-between', borderWidth: 1, borderColor: '#D7E1EC', borderRadius: 6 },
-  actionLabel: { color: INK, fontSize: 12, fontWeight: '800', maxWidth: 100 },
+  actionButton: { backgroundColor: colors.surface, width: '48%', minHeight: 94, padding: 15, justifyContent: 'space-between', borderWidth: 1, borderColor: colors.border, borderRadius: 6 },
+  actionLabel: { color: colors.text, fontSize: 12, fontWeight: '800', maxWidth: 100 },
   notificationHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 28, marginBottom: 4 },
-  noNotifications: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, backgroundColor: '#F4F7FA', borderWidth: 1, borderColor: '#D7E1EC', borderRadius: 6, marginTop: 9 },
-  noNotificationsText: { color: MUTED, fontSize: 11, fontWeight: '700' },
+  noNotifications: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 6, marginTop: 9 },
+  noNotificationsText: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(8, 19, 34, 0.78)', alignItems: 'center', justifyContent: 'center', padding: 18 },
-  notificationModal: { width: '100%', maxWidth: 720, height: '82%', backgroundColor: PAPER, borderRadius: 10, overflow: 'hidden' },
+  notificationModal: { width: '100%', maxWidth: 720, height: '82%', backgroundColor: colors.surface, borderRadius: 10, overflow: 'hidden' },
   modalHeader: { minHeight: 68, paddingLeft: 17, backgroundColor: NAVY, flexDirection: 'row', alignItems: 'center' },
   modalTitle: { color: PAPER, fontSize: 18, fontWeight: '900' },
   modalSubtitle: { color: YELLOW, fontSize: 8, fontWeight: '900', letterSpacing: 1, marginTop: 4 },
   modalClose: { width: 62, minHeight: 68, marginLeft: 'auto', alignItems: 'center', justifyContent: 'center' },
-  logToolbar: { minHeight: 50, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#D7E1EC', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  logCount: { color: MUTED, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
+  logToolbar: { minHeight: 50, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  logCount: { color: colors.textMuted, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
   clearAllText: { color: '#B3261E', fontSize: 11, fontWeight: '900' },
   clearDisabled: { opacity: 0.4 },
   logContent: { flexGrow: 1, padding: 16 },
-  logItem: { minHeight: 76, flexDirection: 'row', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: '#E2EAF2', paddingVertical: 12 },
-  logIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#EAF3FB', alignItems: 'center', justifyContent: 'center' },
+  logItem: { minHeight: 76, flexDirection: 'row', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 12 },
+  logIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
   logCopy: { flex: 1, marginLeft: 11 },
-  logTitle: { color: INK, fontSize: 12, fontWeight: '900' },
-  logMessage: { color: MUTED, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  logTitle: { color: colors.text, fontSize: 12, fontWeight: '900' },
+  logMessage: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   logDate: { color: '#7C8997', fontSize: 8, marginTop: 5 },
   clearOneButton: { width: 42, minHeight: 42, alignItems: 'center', justifyContent: 'center' },
   emptyLog: { flex: 1, minHeight: 260, alignItems: 'center', justifyContent: 'center' },
-  emptyLogText: { color: MUTED, fontSize: 12, marginTop: 10 },
-  tipCard: { flexDirection: 'row', backgroundColor: '#EAF1F8', padding: 15, marginTop: 26, alignItems: 'center', borderRadius: 6 },
+  emptyLogText: { color: colors.textMuted, fontSize: 12, marginTop: 10 },
+  tipCard: { flexDirection: 'row', backgroundColor: colors.surfaceMuted, padding: 15, marginTop: 26, alignItems: 'center', borderRadius: 6 },
   tipIcon: { width: 36, height: 36, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center', marginRight: 12, borderRadius: 6 },
   tipCopy: { flex: 1 },
-  tipTitle: { color: INK, fontSize: 12, fontWeight: '800', marginBottom: 4 },
-  tipText: { color: '#5E5E58', fontSize: 11, lineHeight: 16 },
+  tipTitle: { color: colors.text, fontSize: 12, fontWeight: '800', marginBottom: 4 },
+  tipText: { color: colors.textMuted, fontSize: 11, lineHeight: 16 },
 });

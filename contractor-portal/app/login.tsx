@@ -1,20 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Image, ImageBackground, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ThemeToggle } from '@/components/theme-toggle';
+import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 
 const YELLOW = '#F3EC35';
 const NAVY = '#003366';
-const BLUE = '#1E67B2';
 const PAPER = '#FFFFFF';
-const MUTED = '#566273';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -83,6 +85,7 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.hero}>
+          <View style={styles.themeToggle}><ThemeToggle /></View>
           <Image source={require('@/assets/images/Marty-Wright-Home-Sales_anderson.png')} style={styles.logo} resizeMode="contain" />
           <View style={styles.heroCopy}>
             <Text style={styles.heroKicker}>CONTRACTOR ACCESS</Text>
@@ -97,7 +100,7 @@ export default function LoginScreen() {
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets>
           <View style={styles.accessLabel}>
-            <Ionicons name="shield-checkmark-outline" size={19} color={BLUE} />
+            <Ionicons name="shield-checkmark-outline" size={19} color={colors.primary} />
             <Text style={styles.accessText}>CONTRACTORS ONLY</Text>
           </View>
           <Text style={styles.title}>Log In</Text>
@@ -134,7 +137,7 @@ export default function LoginScreen() {
               onSubmitEditing={signIn}
             />
             <TouchableOpacity style={styles.passwordToggle} onPress={() => setShowPassword((visible) => !visible)} accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
-              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color={BLUE} />
+              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
@@ -151,28 +154,29 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: PAPER },
+const createStyles = (colors: AppThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   hero: { minHeight: 150, paddingHorizontal: 22, paddingTop: 15, paddingBottom: 15, justifyContent: 'space-between' },
+  themeToggle: { position: 'absolute', right: 18, top: 16, zIndex: 2 },
   logo: { width: 190, height: 88, alignSelf: 'flex-start' },
   heroCopy: { maxWidth: 310 },
   heroKicker: { color: YELLOW, fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 9 },
   heroTitle: { color: PAPER, fontSize: 29, fontWeight: '800', marginBottom: 8 },
   heroText: { color: '#DDE8F3', fontSize: 13, lineHeight: 19 },
-  formScroll: { flex: 1 },
+  formScroll: { flex: 1, backgroundColor: colors.background },
   form: { flexGrow: 1, paddingHorizontal: 22, paddingTop: 25, paddingBottom: 24 },
   accessLabel: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, borderRadius: 6 },
-  accessText: { color: BLUE, fontSize: 10, fontWeight: '900', letterSpacing: 1.2, marginLeft: 7 },
-  title: { color: NAVY, fontSize: 27, fontWeight: '800' },
-  subtitle: { color: MUTED, fontSize: 13, marginTop: 6, marginBottom: 24 },
-  label: { color: NAVY, fontSize: 11, fontWeight: '800', marginBottom: 7, marginTop: 15 },
-  input: { minHeight: 50, borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', paddingHorizontal: 14, color: NAVY, fontSize: 15, borderRadius: 6 },
-  passwordField: { minHeight: 50, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', borderRadius: 6 },
-  passwordInput: { flex: 1, minHeight: 48, paddingHorizontal: 14, color: NAVY, fontSize: 15 },
+  accessText: { color: colors.primary, fontSize: 10, fontWeight: '900', letterSpacing: 1.2, marginLeft: 7 },
+  title: { color: colors.text, fontSize: 27, fontWeight: '800' },
+  subtitle: { color: colors.textMuted, fontSize: 13, marginTop: 6, marginBottom: 24 },
+  label: { color: colors.text, fontSize: 11, fontWeight: '800', marginBottom: 7, marginTop: 15 },
+  input: { minHeight: 50, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.input, paddingHorizontal: 14, color: colors.text, fontSize: 15, borderRadius: 6 },
+  passwordField: { minHeight: 50, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.input, borderRadius: 6 },
+  passwordInput: { flex: 1, minHeight: 48, paddingHorizontal: 14, color: colors.text, fontSize: 15 },
   passwordToggle: { width: 50, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   primaryButton: { minHeight: 52, backgroundColor: YELLOW, marginTop: 24, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 9, borderRadius: 6 },
   primaryButtonText: { color: NAVY, fontSize: 13, fontWeight: '900' },
-  demoText: { color: MUTED, fontSize: 11, lineHeight: 16, marginTop: 14 },
-  footerText: { color: MUTED, fontSize: 11, lineHeight: 16, marginTop: 'auto', paddingBottom: 20 },
+  demoText: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 14 },
+  footerText: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 'auto', paddingBottom: 20 },
 });

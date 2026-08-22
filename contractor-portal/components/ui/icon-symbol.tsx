@@ -22,6 +22,7 @@ const MAPPING = {
   'wrench.and.screwdriver.fill': 'build',
   'square.and.pencil': 'edit',
   'checkmark.seal.fill': 'verified',
+  'list.bullet.clipboard.fill': 'fact-check',
   'person.2.fill': 'manage-accounts',
 } as IconMapping;
 

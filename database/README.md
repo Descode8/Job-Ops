@@ -35,6 +35,7 @@ For local testing, run [`seed_test_data.sql`](seed_test_data.sql) after the sche
 23. `23_admin_edit_delete_work_orders.sql` - lets admins edit and delete work orders.
 24. `24_notification_history_and_admin_activity.sql` - adds notification history and admin activity notices.
 25. `25_work_order_recipient_email.sql` - routes newly created work-order emails to `jhumphries@shopmwhs.net`.
+26. `26_home_progress.sql` - creates new-home installation records with their complete 14-item progress checklist.
 
 The schema assumes Supabase PostgreSQL because `contractors.auth_user_id` references `auth.users`. The app uses the contractor's Supabase Auth email as the username and a password for sign-in; `phone_number` remains a contractor contact field. If this is run outside Supabase, replace that foreign key with the project's authentication table.
 

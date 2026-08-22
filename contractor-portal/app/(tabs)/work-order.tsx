@@ -2,16 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { ImageBackground } from 'expo-image';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 
 const YELLOW = '#FFF200';
 const NAVY = '#003366';
 const BLUE = '#1E67B2';
-const INK = '#172033';
 const PAPER = '#FFFFFF';
 const MUTED = '#566273';
 const WORK_ORDER_RECIPIENT = 'jhumphries@shopmwhs.net';
@@ -19,6 +19,7 @@ const WORK_ORDER_RECIPIENT = 'jhumphries@shopmwhs.net';
 type ContractorOption = { id: string; full_name: string };
 
 export default function WorkOrderScreen() {
+  const { colorScheme, colors } = useAppTheme(); const styles = useMemo(() => createStyles(colors), [colors]);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -162,7 +163,7 @@ export default function WorkOrderScreen() {
             <TouchableOpacity style={[styles.deadlineOption, hasDeadline && styles.deadlineOptionSelected]} onPress={() => { setHasDeadline(true); setShowCalendar(true); }} accessibilityRole="radio" accessibilityState={{ checked: hasDeadline }}><Ionicons name={hasDeadline ? 'radio-button-on' : 'radio-button-off'} size={18} color={hasDeadline ? BLUE : MUTED} /><Text style={[styles.deadlineOptionText, hasDeadline && styles.deadlineOptionTextSelected]}>Set Deadline</Text></TouchableOpacity>
           </View>
           {hasDeadline && <TouchableOpacity style={styles.calendarButton} onPress={() => setShowCalendar((isOpen) => !isOpen)}><Ionicons name="calendar-outline" size={20} color={BLUE} /><View style={styles.calendarDateCopy}><Text style={styles.calendarLabel}>DEADLINE DATE</Text><Text style={styles.calendarDate}>{deadline.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}</Text></View><Ionicons name={showCalendar ? 'chevron-up' : 'chevron-down'} size={18} color={NAVY} /></TouchableOpacity>}
-          {hasDeadline && showCalendar && <View style={styles.datePickerSurface}><DateTimePicker value={deadline} mode="date" minimumDate={new Date()} display={Platform.OS === 'ios' ? 'inline' : 'calendar'} themeVariant="light" accentColor={BLUE} style={styles.datePicker} onChange={(event: DateTimePickerEvent, selectedDate?: Date) => { if (Platform.OS === 'android') setShowCalendar(false); if (event.type === 'set' && selectedDate) setDeadline(selectedDate); }} />{Platform.OS === 'ios' && <TouchableOpacity style={styles.calendarDone} onPress={() => setShowCalendar(false)}><Text style={styles.calendarDoneText}>Done</Text></TouchableOpacity>}</View>}
+          {hasDeadline && showCalendar && <View style={styles.datePickerSurface}><DateTimePicker value={deadline} mode="date" minimumDate={new Date()} display={Platform.OS === 'ios' ? 'inline' : 'calendar'} themeVariant={colorScheme} accentColor={colors.primary} style={styles.datePicker} onChange={(event: DateTimePickerEvent, selectedDate?: Date) => { if (Platform.OS === 'android') setShowCalendar(false); if (event.type === 'set' && selectedDate) setDeadline(selectedDate); }} />{Platform.OS === 'ios' && <TouchableOpacity style={styles.calendarDone} onPress={() => setShowCalendar(false)}><Text style={styles.calendarDoneText}>Done</Text></TouchableOpacity>}</View>}
         </View>
 
         <View style={styles.fieldGroup}>
@@ -222,6 +223,7 @@ function Field({ label, value, onChangeText, placeholder, multiline = false, key
   keyboardType?: 'default' | 'email-address' | 'phone-pad';
   autoCapitalize?: 'none' | 'sentences';
 }) {
+  const { colors } = useAppTheme(); const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.fieldGroup}>
       <Text style={styles.label}>{label}</Text>
@@ -230,7 +232,7 @@ function Field({ label, value, onChangeText, placeholder, multiline = false, key
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#8A98A8"
+        placeholderTextColor={colors.textMuted}
         multiline={multiline}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
@@ -240,42 +242,42 @@ function Field({ label, value, onChangeText, placeholder, multiline = false, key
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: 'transparent' },
-  keyboardAvoidingView: { flex: 1, backgroundColor: '#000000' },
-  content: { flexGrow: 1, backgroundColor: PAPER, paddingHorizontal: 20, paddingBottom: 35 },
+const createStyles = (colors: AppThemeColors) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  keyboardAvoidingView: { flex: 1, backgroundColor: colors.background },
+  content: { flexGrow: 1, backgroundColor: colors.background, paddingHorizontal: 20, paddingBottom: 35 },
   header: { backgroundColor: NAVY, marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   kicker: { color: YELLOW, fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginBottom: 8 },
   title: { color: PAPER, fontSize: 27, fontWeight: '800' },
   headerIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
-  intro: { color: MUTED, fontSize: 12, lineHeight: 18, marginTop: 21, marginBottom: 3 },
+  intro: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 21, marginBottom: 3 },
   fieldGroup: { marginTop: 17 },
-  label: { color: INK, fontSize: 11, fontWeight: '800', marginBottom: 7 },
-  input: { borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', minHeight: 47, paddingHorizontal: 13, color: INK, fontSize: 13, borderRadius: 6 },
+  label: { color: colors.text, fontSize: 11, fontWeight: '800', marginBottom: 7 },
+  input: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.input, minHeight: 47, paddingHorizontal: 13, color: colors.text, fontSize: 13, borderRadius: 6 },
   multilineInput: { minHeight: 94, paddingTop: 13 },
   deadlineOptions: { flexDirection: 'row', gap: 9 },
-  deadlineOption: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', borderRadius: 6 },
-  deadlineOptionSelected: { borderColor: BLUE, backgroundColor: '#EAF3FB' },
-  deadlineOptionText: { color: MUTED, fontSize: 11, fontWeight: '800' },
-  deadlineOptionTextSelected: { color: NAVY },
-  calendarButton: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: PAPER, paddingHorizontal: 13, marginTop: 9, borderRadius: 6 },
+  deadlineOption: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.input, borderRadius: 6 },
+  deadlineOptionSelected: { borderColor: colors.primary, backgroundColor: colors.surfaceMuted },
+  deadlineOptionText: { color: colors.textMuted, fontSize: 11, fontWeight: '800' },
+  deadlineOptionTextSelected: { color: colors.primaryStrong },
+  calendarButton: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 13, marginTop: 9, borderRadius: 6 },
   calendarDateCopy: { flex: 1, alignSelf: 'stretch', justifyContent: 'center' },
-  calendarLabel: { color: MUTED, fontSize: 8, fontWeight: '900' },
-  calendarDate: { color: INK, fontSize: 12, fontWeight: '800', marginTop: 3 },
-  datePickerSurface: { backgroundColor: PAPER, borderWidth: 1, borderColor: '#C9D7E5', borderRadius: 8, marginTop: 9, overflow: 'hidden' },
-  datePicker: { backgroundColor: PAPER, alignSelf: 'stretch' },
-  calendarDone: { minHeight: 42, backgroundColor: '#EAF3FB', alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: '#C9D7E5' },
+  calendarLabel: { color: colors.textMuted, fontSize: 8, fontWeight: '900' },
+  calendarDate: { color: colors.text, fontSize: 12, fontWeight: '800', marginTop: 3 },
+  datePickerSurface: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 8, marginTop: 9, overflow: 'hidden' },
+  datePicker: { backgroundColor: colors.surface, alignSelf: 'stretch' },
+  calendarDone: { minHeight: 42, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: colors.border },
   calendarDoneText: { color: BLUE, fontSize: 12, fontWeight: '900' },
-  dropdownButton: { borderWidth: 1, borderColor: '#C9D7E5', backgroundColor: '#F8FAFC', minHeight: 47, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 6 },
-  dropdownText: { color: INK, fontSize: 13 },
-  dropdownPlaceholder: { color: '#8A98A8' },
-  dropdownList: { borderWidth: 1, borderTopWidth: 0, borderColor: '#C9D7E5', backgroundColor: PAPER, borderRadius: 6 },
-  dropdownOption: { minHeight: 47, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#E4EBF2', borderRadius: 6 },
-  dropdownOptionText: { color: INK, fontSize: 13, fontWeight: '600' },
-  emptyDropdownText: { color: MUTED, fontSize: 12, padding: 13 },
-  emailNotice: { flexDirection: 'row', backgroundColor: '#EAF1F8', padding: 13, marginTop: 22, alignItems: 'flex-start', borderRadius: 6 },
-  emailNoticeText: { color: MUTED, fontSize: 11, lineHeight: 16, flex: 1, marginLeft: 9 },
-  emailAddress: { color: INK, fontWeight: '900' },
+  dropdownButton: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.input, minHeight: 47, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 6 },
+  dropdownText: { color: colors.text, fontSize: 13 },
+  dropdownPlaceholder: { color: colors.textMuted },
+  dropdownList: { borderWidth: 1, borderTopWidth: 0, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: 6 },
+  dropdownOption: { minHeight: 47, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: colors.border, borderRadius: 6 },
+  dropdownOptionText: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  emptyDropdownText: { color: colors.textMuted, fontSize: 12, padding: 13 },
+  emailNotice: { flexDirection: 'row', backgroundColor: colors.surfaceMuted, padding: 13, marginTop: 22, alignItems: 'flex-start', borderRadius: 6 },
+  emailNoticeText: { color: colors.textMuted, fontSize: 11, lineHeight: 16, flex: 1, marginLeft: 9 },
+  emailAddress: { color: colors.text, fontWeight: '900' },
   submitButton: { minHeight: 52, backgroundColor: '#2577BB', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 18, paddingHorizontal: 12, borderRadius: 6 },
   submitButtonPressed: { backgroundColor: '#1C1C5C' },
   submitText: { color: PAPER, fontSize: 12, fontWeight: '900', marginLeft: 8 },

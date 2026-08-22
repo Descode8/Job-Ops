@@ -1,27 +1,24 @@
 import { Tabs } from 'expo-router';
-import { ImageBackground } from 'expo-image';
 import React, { useEffect, useState } from 'react';
 
-import { HapticTab } from '@/components/haptic-tab';
+import { CarouselTabBar } from '@/components/carousel-tab-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { supabase } from '@/lib/supabase';
 
+export const unstable_settings = {
+  initialRouteName: 'index',
+};
+
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => { void (async () => { const { data: auth } = await supabase.auth.getUser(); if (!auth.user) return; const { data } = await supabase.from('contractors').select('is_admin').eq('auth_user_id', auth.user.id).eq('is_active', true).single(); setIsAdmin(Boolean(data?.is_admin)); })(); }, []);
 
   return (
     <Tabs
+      initialRouteName="index"
+      tabBar={(props) => <CarouselTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: '#FFF200',
-        tabBarInactiveTintColor: Colors[colorScheme ?? 'light'].tabIconDefault,
-        tabBarStyle: { backgroundColor: 'transparent', borderTopColor: '#1E67B2' },
-        tabBarBackground: () => <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={{ flex: 1 }} contentFit="cover" />,
         headerShown: false,
-        tabBarButton: HapticTab,
       }}>
       <Tabs.Screen
         name="index"
@@ -42,6 +39,13 @@ export default function TabLayout() {
         options={{
           title: 'Service',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="wrench.and.screwdriver.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="home-progress"
+        options={{
+          title: 'Home Progress',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet.clipboard.fill" color={color} />,
         }}
       />
       <Tabs.Screen
