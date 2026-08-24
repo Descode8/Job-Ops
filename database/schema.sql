@@ -148,7 +148,7 @@ insert into public.home_checklist_items (item_key, label, sort_order) values
   ('septic', 'Septic', 7),
   ('plumbing_tie_in', 'Plumbing tie-in', 8),
   ('waterline', 'Waterline', 9),
-  ('backfill_seed_straw', 'Backfill, seed and straw', 10),
+  ('backfill_seed_straw', 'Backfill, Seed & Straw', 10),
   ('driveway', 'Driveway', 11),
   ('get_ready', 'Get ready', 12),
   ('meter_install', 'Meter install', 13),

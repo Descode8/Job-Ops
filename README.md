@@ -118,7 +118,7 @@ The customer's requested scope is represented by the following product requireme
 
 Each home address has a checklist that contractors complete before submitting work:
 
-`Plumbing`, `Meter`, `HVAC`, `Underpinning`, `Steps / decks`, `Well`, `Septic`, `Plumbing tie-in`, `Waterline`, `Backfill, seed and straw`, `Driveway`, `Get ready`, `Meter install`, and `Final walk-through`.
+`Plumbing`, `Meter`, `HVAC`, `Underpinning`, `Steps / decks`, `Well`, `Septic`, `Plumbing tie-in`, `Waterline`, `Backfill, Seed & Straw`, `Driveway`, `Get ready`, `Meter install`, and `Final walk-through`.
 
 Completion submissions include the checklist state, completion date, final photos, materials used, final invoice, and contractor notes. The office receives a notification when the contractor submits the job.
 

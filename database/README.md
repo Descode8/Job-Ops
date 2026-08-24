@@ -36,6 +36,27 @@ For local testing, run [`seed_test_data.sql`](seed_test_data.sql) after the sche
 24. `24_notification_history_and_admin_activity.sql` - adds notification history and admin activity notices.
 25. `25_work_order_recipient_email.sql` - routes newly created work-order emails to `jhumphries@shopmwhs.net`.
 26. `26_home_progress.sql` - creates new-home installation records with their complete 14-item progress checklist.
+27. `27_contractor_workflow.sql` - limits contractor completion to work photos and a priced PDF invoice, and repairs legacy recipient emails.
+28. `28_work_order_start_actions.sql` - marks accepted work orders in progress when the contractor calls the customer or starts navigation.
+29. `29_contractor_profiles.sql` - adds self-service profile editing and private contractor profile-photo storage.
+30. `30_admin_profile_images.sql` - lets admins securely display contractor profile photos in management lists.
+31. `31_home_progress_checklist_completion.sql` - allows Home Progress records to be completed after all 14 checklist items are checked.
+32. `32_work_order_photo_limit.sql` - limits Home Progress and standard work orders to 10 uploaded photos each.
+33. `33_work_order_creation_priority.sql` - stores the priority selected when a standard work order is created.
+34. `34_work_order_number_format.sql` - generates priority- and year-coded standard work-order numbers.
+35. `35_work_order_completion_and_photo_limit.sql` - requires a note and two photos for standard completion, makes invoices optional, and raises the photo limit to 25.
+36. `36_fix_work_order_number_ambiguity.sql` - qualifies the work-order number collision check so new coded work orders can be created.
+37. `37_home_progress_financing_type.sql` - adds FHA/Non-FHA selection, coded five-character Home Progress numbers, and assigns each home to its creating admin.
+38. `38_work_order_realtime.sql` - publishes work-order and assignment changes for live screen updates.
+39. `39_notification_realtime.sql` - publishes persistent notification inserts for global in-app alerts.
+40. `40_work_order_offer_realtime.sql` - publishes work-order offers and responses for persistent global prompts.
+41. `41_work_order_photo_deletion.sql` - lets active assignees and admins remove individual or all work-order photos.
+42. `42_completed_work_order_content_editing.sql` - lets active assignees and admins remove job notes after completion; completed work-order attachments and notes remain editable.
+43. `43_reopen_incomplete_work_orders.sql` - returns a completed standard work order to In Progress if deleting content leaves it with fewer than one job note or two supported photos.
+44. `44_invoice_price_editing.sql` - lets admins and active assignees update invoice prices, including after completion.
+45. `45_work_order_invoice_price.sql` - stores an invoice price independently so a PDF attachment is optional.
+46. `46_single_invoice_attachment.sql` - allows only one invoice image attachment per work order.
+47. `47_clear_notification_history.sql` - reliably clears the signed-in user's notification history.
 
 The schema assumes Supabase PostgreSQL because `contractors.auth_user_id` references `auth.users`. The app uses the contractor's Supabase Auth email as the username and a password for sign-in; `phone_number` remains a contractor contact field. If this is run outside Supabase, replace that foreign key with the project's authentication table.
 
@@ -57,4 +78,4 @@ If the contractor app should create work orders, run `11_contractor_work_order_p
 
 Run `12_work_order_offers.sql` once to enable contractor-to-contractor offers. A recipient who accepts becomes the assignee; a recipient who rejects assigns the work order back to its sender.
 
-Run `17_finalize_work_orders.sql` after the earlier migrations. A work order can then be finalized only when every active checklist item is checked, a supported job image is attached, and the invoice is a PDF. Job notes are optional.
+Run all migrations through `47_clear_notification_history.sql`. A standard work order can then be completed after it has at least one work-order note and two supported photos. Invoice prices and invoice image attachments are independently optional, with one invoice attachment allowed per work order. Home Progress records retain their separate 14-step completion checklist.

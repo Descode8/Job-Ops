@@ -17,7 +17,7 @@ export function ThemeToggle() {
         styles.button,
         { backgroundColor: colors.surfaceElevated, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
       ]}>
-      <Ionicons name={colorScheme === 'dark' ? 'sunny-outline' : 'moon-outline'} size={20} color={colors.primary} />
+      <Ionicons name={colorScheme === 'dark' ? 'sunny' : 'moon'} size={20} color={colors.primary} />
     </Pressable>
   );
 }

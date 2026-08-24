@@ -30,17 +30,27 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
+          "image": "./assets/images/Marty-Wright-Home-Sales_anderson.png",
+          "imageWidth": 260,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#07111F",
           "dark": {
-            "backgroundColor": "#000000"
+            "image": "./assets/images/Marty-Wright-Home-Sales_anderson.png",
+            "backgroundColor": "#07111F"
           }
         }
       ],
       "@react-native-community/datetimepicker",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/trebuc.ttf",
+            "./assets/fonts/Trebuchet-MS-Italic.ttf"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

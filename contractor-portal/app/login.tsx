@@ -2,12 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Image, ImageBackground, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, ImageBackground, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeToggle } from '@/components/theme-toggle';
 import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { AppText as Text, AppTextInput as TextInput } from '@/components/app-typography';
+import { ThemedAlert as Alert } from '@/components/themed-alert';
 
 const YELLOW = '#F3EC35';
 const NAVY = '#003366';
@@ -89,7 +91,7 @@ export default function LoginScreen() {
           <Image source={require('@/assets/images/Marty-Wright-Home-Sales_anderson.png')} style={styles.logo} resizeMode="contain" />
           <View style={styles.heroCopy}>
             <Text style={styles.heroKicker}>CONTRACTOR ACCESS</Text>
-            <Text style={styles.heroTitle}>Your work, organized.</Text>
+            <Text style={styles.heroTitle}>Your Work Organized</Text>
           </View>
         </ImageBackground>
 
@@ -100,7 +102,7 @@ export default function LoginScreen() {
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets>
           <View style={styles.accessLabel}>
-            <Ionicons name="shield-checkmark-outline" size={19} color={colors.primary} />
+            <Ionicons name="shield-checkmark" size={19} color={colors.primary} />
             <Text style={styles.accessText}>CONTRACTORS ONLY</Text>
           </View>
           <Text style={styles.title}>Log In</Text>
@@ -137,7 +139,7 @@ export default function LoginScreen() {
               onSubmitEditing={signIn}
             />
             <TouchableOpacity style={styles.passwordToggle} onPress={() => setShowPassword((visible) => !visible)} accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
-              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={21} color={colors.primary} />
+              <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={21} color={colors.primary} />
             </TouchableOpacity>
           </View>
 

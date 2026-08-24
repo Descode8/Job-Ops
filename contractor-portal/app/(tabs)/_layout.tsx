@@ -1,4 +1,6 @@
 import { Tabs } from 'expo-router';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import React, { useEffect, useState } from 'react';
 
 import { CarouselTabBar } from '@/components/carousel-tab-bar';
@@ -16,7 +18,7 @@ export default function TabLayout() {
   return (
     <Tabs
       initialRouteName="index"
-      tabBar={(props) => <CarouselTabBar {...props} />}
+      tabBar={(props) => <CarouselTabBar {...props} isAdmin={isAdmin} />}
       screenOptions={{
         headerShown: false,
       }}>
@@ -30,41 +32,44 @@ export default function TabLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Jobs',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="briefcase.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="service"
-        options={{
-          title: 'Service',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="wrench.and.screwdriver.fill" color={color} />,
+          title: isAdmin ? 'Services' : 'Work Orders',
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons size={28} name="tools" color={color} />,
         }}
       />
       <Tabs.Screen
         name="home-progress"
         options={{
           title: 'Home Progress',
+          href: isAdmin ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet.clipboard.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="completed-home"
+        options={{
+          title: 'Complete Home',
+          href: isAdmin ? undefined : null,
+          tabBarIcon: ({ color }) => <MaterialIcons size={28} name="home-work" color={color} />,
         }}
       />
       <Tabs.Screen
         name="work-order"
         options={{
-          title: 'New WO',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="square.and.pencil" color={color} />,
+          title: 'Create WO',
+          href: isAdmin ? undefined : null,
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons size={28} name="text-box-plus" color={color} />,
         }}
       />
       <Tabs.Screen
         name="completed"
         options={{
-          title: 'Completed WO',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="checkmark.seal.fill" color={color} />,
+          title: isAdmin ? 'Complete WO' : 'Complete Work Orders',
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons size={28} name="clipboard-check" color={color} />,
         }}
       />
       <Tabs.Screen
         name="admin"
-        options={{ title: 'Admin', href: isAdmin ? undefined : null, tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.2.fill" color={color} /> }}
+        options={{ title: 'Admin', href: isAdmin ? undefined : null, tabBarIcon: ({ color }) => <MaterialIcons size={28} name="manage-accounts" color={color} /> }}
       />
     </Tabs>
   );
