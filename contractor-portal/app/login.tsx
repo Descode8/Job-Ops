@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Image, ImageBackground, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -11,8 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { AppText as Text, AppTextInput as TextInput } from '@/components/app-typography';
 import { ThemedAlert as Alert } from '@/components/themed-alert';
 
-const YELLOW = '#F3EC35';
-const NAVY = '#003366';
+const BRAND_BLUE = '#1D4ED8';
 const PAPER = '#FFFFFF';
 
 export default function LoginScreen() {
@@ -86,14 +85,14 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.hero}>
+        <View style={styles.hero}>
           <View style={styles.themeToggle}><ThemeToggle /></View>
-          <Image source={require('@/assets/images/Marty-Wright-Home-Sales_anderson.png')} style={styles.logo} resizeMode="contain" />
+          <Image source={require('@/assets/images/JobOps_logo_v2.png')} style={styles.logo} resizeMode="contain" />
           <View style={styles.heroCopy}>
-            <Text style={styles.heroKicker}>CONTRACTOR ACCESS</Text>
-            <Text style={styles.heroTitle}>Your Work Organized</Text>
+            <Text style={styles.heroKicker}>MANAGE · ASSIGN · COMPLETE</Text>
+            <Text style={styles.heroTitle}>Field Operations, Organized</Text>
           </View>
-        </ImageBackground>
+        </View>
 
         <ScrollView
           style={styles.formScroll}
@@ -143,13 +142,13 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.primaryButton} onPress={signIn} activeOpacity={0.85} disabled={isLoading}>
+          <TouchableOpacity style={styles.primaryButton} onPress={signIn} activeOpacity={0.72} disabled={isLoading}>
             <Text style={styles.primaryButtonText}>{isLoading ? 'Logging in...' : 'Log in'}</Text>
-            <Ionicons name="arrow-forward" size={19} color={NAVY} />
+            <Ionicons name="arrow-forward" size={19} color={PAPER} />
           </TouchableOpacity>
 
           <Text style={styles.demoText}>Only active contractors linked to a Supabase Auth account can continue.</Text>
-          <Text style={styles.footerText}>Need access? Contact the Marty Wright office to be added as an approved contractor.</Text>
+          <Text style={styles.footerText}>Need access? Contact your JobOps administrator to be added as an approved contractor.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -159,11 +158,11 @@ export default function LoginScreen() {
 const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  hero: { minHeight: 150, paddingHorizontal: 22, paddingTop: 15, paddingBottom: 15, justifyContent: 'space-between' },
+  hero: { minHeight: 210, paddingHorizontal: 22, paddingTop: 15, paddingBottom: 22, justifyContent: 'space-between', backgroundColor: '#050B14', borderBottomWidth: 0.5, borderBottomColor: '#243B5C' },
   themeToggle: { position: 'absolute', right: 18, top: 16, zIndex: 2 },
-  logo: { width: 190, height: 88, alignSelf: 'flex-start' },
+  logo: { width: 96, height: 96, alignSelf: 'flex-start' },
   heroCopy: { maxWidth: 310 },
-  heroKicker: { color: YELLOW, fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 9 },
+  heroKicker: { color: BRAND_BLUE, fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 9 },
   heroTitle: { color: PAPER, fontSize: 29, fontWeight: '800', marginBottom: 8 },
   heroText: { color: '#DDE8F3', fontSize: 13, lineHeight: 19 },
   formScroll: { flex: 1, backgroundColor: colors.background },
@@ -173,12 +172,12 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   title: { color: colors.text, fontSize: 27, fontWeight: '800' },
   subtitle: { color: colors.textMuted, fontSize: 13, marginTop: 6, marginBottom: 24 },
   label: { color: colors.text, fontSize: 11, fontWeight: '800', marginBottom: 7, marginTop: 15 },
-  input: { minHeight: 50, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.input, paddingHorizontal: 14, color: colors.text, fontSize: 15, borderRadius: 6 },
-  passwordField: { minHeight: 50, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.input, borderRadius: 6 },
+  input: { minHeight: 50, borderWidth: 0.5, borderColor: colors.border, backgroundColor: colors.input, paddingHorizontal: 14, color: colors.text, fontSize: 15, borderRadius: 6 },
+  passwordField: { minHeight: 50, flexDirection: 'row', alignItems: 'center', borderWidth: 0.5, borderColor: colors.border, backgroundColor: colors.input, borderRadius: 6 },
   passwordInput: { flex: 1, minHeight: 48, paddingHorizontal: 14, color: colors.text, fontSize: 15 },
   passwordToggle: { width: 50, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  primaryButton: { minHeight: 52, backgroundColor: YELLOW, marginTop: 24, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 9, borderRadius: 6 },
-  primaryButtonText: { color: NAVY, fontSize: 13, fontWeight: '900' },
+  primaryButton: { minHeight: 52, backgroundColor: '#243B5C', marginTop: 24, paddingHorizontal: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, borderRadius: 6 },
+  primaryButtonText: { color: PAPER, fontSize: 13, fontWeight: '900' },
   demoText: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 14 },
   footerText: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 'auto', paddingBottom: 20 },
 });

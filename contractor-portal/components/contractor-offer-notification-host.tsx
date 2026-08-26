@@ -94,7 +94,7 @@ export function ContractorOfferNotificationHost() {
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(2, 8, 18, 0.82)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  card: { width: '100%', maxWidth: 440, borderWidth: 1, borderRadius: 18, padding: 24, alignItems: 'center' },
+  card: { width: '100%', maxWidth: 440, borderWidth: 0.5, borderRadius: 18, padding: 24, alignItems: 'center' },
   icon: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   kicker: { fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
   title: { fontSize: 21, lineHeight: 28, fontWeight: '900', textAlign: 'center', marginTop: 7 },
@@ -104,9 +104,9 @@ const styles = StyleSheet.create({
   description: { fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 13 },
   sender: { fontSize: 9, fontWeight: '800', marginTop: 12 },
   actions: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 22 },
-  rejectButton: { flex: 1, minHeight: 52, borderRadius: 8, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center' },
-  acceptButton: { flex: 1, minHeight: 52, borderRadius: 8, backgroundColor: '#35A767', alignItems: 'center', justifyContent: 'center' },
-  buttonPressed: { opacity: 0.78 },
+  rejectButton: { flex: 1, minHeight: 52, borderRadius: 6, backgroundColor: '#243B5C', paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  acceptButton: { flex: 1, minHeight: 52, borderRadius: 6, backgroundColor: '#243B5C', paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  buttonPressed: { backgroundColor: '#0E1F35' },
   disabled: { opacity: 0.5 },
   actionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
 });

@@ -26,7 +26,7 @@ end $$;
 
 do $$
 begin
-  create type public.file_type as enum ('issue_photo', 'parts_photo', 'before_photo', 'after_photo', 'completion_photo', 'invoice', 'quote', 'material_list', 'receipt', 'other');
+  create type public.file_type as enum ('issue_photo', 'parts_photo', 'before_photo', 'after_photo', 'completion_photo', 'completion_video', 'invoice', 'quote', 'material_list', 'receipt', 'other');
 exception when duplicate_object then null;
 end $$;
 

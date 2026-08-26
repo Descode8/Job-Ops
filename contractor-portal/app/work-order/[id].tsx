@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import { Image, ImageBackground } from 'expo-image';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 
@@ -14,9 +14,12 @@ import { ThemedAlert as Alert } from '@/components/themed-alert';
 import { supabase } from '@/lib/supabase';
 import { WORK_ORDER_STATUS_FONT, workOrderStatusColor } from '@/lib/work-order-status';
 import { formatWorkOrderNumber } from '@/lib/work-order-number';
+import { formatWorkOrderDeadline } from '@/lib/work-order-deadline';
 import { workOrderPriorityColor } from '@/lib/work-order-priority';
+import { formatPhoneNumber, phoneNumberDigits } from '@/lib/phone-number';
+import { useUploads } from '@/contexts/upload-context';
 
-const YELLOW = '#FFF200'; const NAVY = '#003366'; const BLUE = '#1E67B2'; const PAPER = '#FFFFFF'; const FHA_ORANGE = '#FF8A00';
+const YELLOW = '#1D4ED8'; const NAVY = '#09192D'; const BLUE = '#1D4ED8'; const PAPER = '#FFFFFF'; const FHA_ORANGE = '#FFB020';
 
 type WorkOrder = {
   id: string; work_order_number: string; title: string; description: string; status: string;
@@ -29,14 +32,17 @@ type ChecklistItem = { id: number; label: string };
 type ContractorOption = { id: string; full_name: string; email: string | null; phone_number: string };
 type Assignment = { contractor_id: string; contractors: ContractorOption | null };
 type Priority = 'low' | 'medium' | 'high' | 'emergency';
-type UploadProgress = { kind: 'photo' | 'invoice'; completed: number; total: number; fileName: string };
-
 const PHOTO_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif', 'image/webp']);
 const PHOTO_EXTENSIONS = /\.(jpe?g|png|heic|heif|webp)$/i;
 const MAX_WORK_ORDER_PHOTOS = 25;
+const MAX_WORK_ORDER_VIDEOS = 2;
+const MAX_ADMIN_PHOTOS = 10;
+const MAX_ADMIN_VIDEOS = 2;
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 export default function WorkOrderDetailScreen() {
   const { colorScheme, colors } = useAppTheme(); const styles = useMemo(() => createStyles(colors), [colors]);
+  const { isUploading, runUpload } = useUploads();
   const router = useRouter();
   const { id, action } = useLocalSearchParams<{ id: string; action?: string }>();
   const [order, setOrder] = useState<WorkOrder | null>(null);
@@ -54,7 +60,6 @@ export default function WorkOrderDetailScreen() {
   const [invoicePrice, setInvoicePrice] = useState('');
   const [invoicePriceEdits, setInvoicePriceEdits] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editCustomerName, setEditCustomerName] = useState('');
   const [editCustomerPhone, setEditCustomerPhone] = useState('');
@@ -108,8 +113,14 @@ export default function WorkOrderDetailScreen() {
   const isCompleted = order?.status === 'completed';
   const isHomeProgress = order?.work_order_number.startsWith('HOME-') ?? false;
   const photoFiles = files.filter((file) => file.file_type.endsWith('_photo') && PHOTO_MIME_TYPES.has(file.mime_type.toLowerCase()));
+  const videoFiles = files.filter((file) => file.file_type === 'completion_video');
   const invoiceFiles = files.filter((file) => file.file_type === 'invoice');
   const photoCount = photoFiles.length;
+  const videoCount = videoFiles.length;
+  const adminPhotoCount = files.filter((file) => file.file_type === 'other' && PHOTO_MIME_TYPES.has(file.mime_type.toLowerCase())).length;
+  const adminVideoCount = files.filter((file) => file.file_type === 'other' && file.mime_type.toLowerCase().startsWith('video/')).length;
+  const workOrderUploadId = `work-order-${id}`;
+  const isUploadingAttachments = isUploading(workOrderUploadId);
   const hasWorkOrderNote = notes.length > 0;
   const hasCompleteHomeChecklist = checklistItems.length === 14 && checklistItems.every((item) => completedChecklist.includes(item.id));
   const canFinalize = !isCompleted && (isHomeProgress ? hasCompleteHomeChecklist : hasWorkOrderNote && photoCount >= 2);
@@ -188,19 +199,22 @@ export default function WorkOrderDetailScreen() {
     await refreshStatus();
   };
 
-  const uploadFile = async (kind: 'photo' | 'invoice') => {
+  const uploadFile = async (kind: 'photo' | 'video' | 'invoice') => {
     if (!order || !contractorId) return;
     const parsedInvoicePrice = Number(invoicePrice.replace(/[$,\s]/g, ''));
     if (kind === 'invoice' && invoicePrice.trim() && (!Number.isFinite(parsedInvoicePrice) || parsedInvoicePrice < 0)) { Alert.alert('Enter a valid invoice price', 'Use a price of $0 or more, or leave it blank.'); return; }
     let assets: { uri: string; name: string; mimeType: string; size?: number }[] = [];
-    if (kind === 'photo') {
-      const remainingSlots = MAX_WORK_ORDER_PHOTOS - photoCount;
-      if (remainingSlots <= 0) { Alert.alert('Photo limit reached', `A work order can hold no more than ${MAX_WORK_ORDER_PHOTOS} photos.`); return; }
+    if (kind === 'photo' || kind === 'video') {
+      const isVideo = kind === 'video';
+      const limit = isVideo ? MAX_WORK_ORDER_VIDEOS : MAX_WORK_ORDER_PHOTOS;
+      const count = isVideo ? videoCount : photoCount;
+      const remainingSlots = limit - count;
+      if (remainingSlots <= 0) { Alert.alert(`${isVideo ? 'Video' : 'Photo'} limit reached`, `A work order can hold no more than ${limit} ${isVideo ? 'videos' : 'photos'}.`); return; }
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) { Alert.alert('Photo access required', 'Allow photo access to upload job photos.'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsMultipleSelection: true, selectionLimit: remainingSlots, orderedSelection: true });
+      if (!permission.granted) { Alert.alert('Media access required', `Allow photo-library access to upload job ${isVideo ? 'videos' : 'photos'}.`); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: [isVideo ? 'videos' : 'images'], quality: 0.85, videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium, allowsMultipleSelection: true, selectionLimit: remainingSlots, orderedSelection: true });
       if (!result.canceled) {
-        assets = result.assets.slice(0, remainingSlots).map((image, index) => ({ uri: image.uri, name: image.fileName ?? `job-photo-${Date.now()}-${index + 1}.jpg`, mimeType: image.mimeType ?? 'image/jpeg', size: image.fileSize }));
+        assets = result.assets.slice(0, remainingSlots).map((asset, index) => ({ uri: asset.uri, name: asset.fileName ?? `job-${kind}-${Date.now()}-${index + 1}.${isVideo ? 'mp4' : 'jpg'}`, mimeType: asset.mimeType ?? (isVideo ? 'video/mp4' : 'image/jpeg'), size: asset.fileSize }));
       }
     } else {
       if (invoiceFiles.length >= 1) { Alert.alert('Invoice attachment already added', 'Remove the current invoice attachment before uploading another one.'); return; }
@@ -210,6 +224,8 @@ export default function WorkOrderDetailScreen() {
       if (!result.canceled) { const image = result.assets[0]; assets = [{ uri: image.uri, name: image.fileName ?? `invoice-attachment-${Date.now()}.jpg`, mimeType: image.mimeType ?? 'image/jpeg', size: image.fileSize }]; }
     }
     if (!assets.length) return;
+    const oversizedFile = assets.find((asset) => asset.size && asset.size > MAX_UPLOAD_BYTES);
+    if (oversizedFile) { Alert.alert('File is too large', `${oversizedFile.name} is larger than 20 MB.`); return; }
     const unsupportedPhoto = kind === 'photo' && assets.find((asset) => !PHOTO_MIME_TYPES.has(asset.mimeType.toLowerCase()) || !PHOTO_EXTENSIONS.test(asset.name));
     if (unsupportedPhoto) {
       Alert.alert('Unsupported photo', 'Upload a JPG, JPEG, PNG, HEIC, HEIF, or WEBP image from an Android phone or iPhone.'); return;
@@ -217,29 +233,29 @@ export default function WorkOrderDetailScreen() {
     if (kind === 'invoice' && (!PHOTO_MIME_TYPES.has(assets[0].mimeType.toLowerCase()) || !PHOTO_EXTENSIONS.test(assets[0].name))) {
       Alert.alert('Unsupported invoice image', 'Upload a JPG, JPEG, PNG, HEIC, HEIF, or WEBP image.'); return;
     }
-    setIsSaving(true);
-    setUploadProgress({ kind, completed: 0, total: assets.length, fileName: assets[0].name });
     const savedFiles: WorkOrderFile[] = [];
     let uploadFailure: string | null = null;
     let completedUploads = 0;
     let nextUploadIndex = 0;
     const uploadErrors: string[] = [];
+    void runUpload(workOrderUploadId, kind === 'video' ? 'Uploading work-order videos' : kind === 'photo' ? 'Uploading work-order photos' : 'Uploading invoice', assets.length, async (report) => {
     try {
       const uploadWorker = async () => {
         while (nextUploadIndex < assets.length) {
           const index = nextUploadIndex++;
           const asset = assets[index];
-          setUploadProgress({ kind, completed: completedUploads, total: assets.length, fileName: asset.name });
+          report(completedUploads, asset.name);
           try {
             const safeName = asset.name.replace(/[^a-zA-Z0-9._-]/g, '-');
             const storagePath = `${contractorId}/${order.id}/${Date.now()}-${index}-${safeName}`;
             const response = await fetch(asset.uri);
             if (!response.ok) throw new Error(`The selected file could not be read (${response.status}).`);
             const bytes = await response.arrayBuffer();
+            if (bytes.byteLength > MAX_UPLOAD_BYTES) throw new Error(`${asset.name} is larger than 20 MB.`);
             const { error: uploadError } = await supabase.storage.from('work-order-files').upload(storagePath, bytes, { contentType: asset.mimeType });
             if (uploadError) throw new Error(uploadError.message);
             const { data: record, error: recordError } = await supabase.from('work_order_files').insert({
-              work_order_id: order.id, uploaded_by: contractorId, file_type: kind === 'photo' ? 'completion_photo' : 'invoice',
+              work_order_id: order.id, uploaded_by: contractorId, file_type: kind === 'photo' ? 'completion_photo' : kind === 'video' ? 'completion_video' : 'invoice',
               storage_path: storagePath, original_file_name: asset.name, mime_type: asset.mimeType, file_size_bytes: asset.size ?? bytes.byteLength,
               invoice_amount: kind === 'invoice' && invoicePrice.trim() ? parsedInvoicePrice : null,
             }).select('id, file_type, storage_path, original_file_name, mime_type, created_at, invoice_amount').single();
@@ -253,7 +269,7 @@ export default function WorkOrderDetailScreen() {
             uploadErrors.push(error instanceof Error ? error.message : 'An unexpected upload error occurred.');
           } finally {
             completedUploads += 1;
-            setUploadProgress({ kind, completed: completedUploads, total: assets.length, fileName: asset.name });
+            report(completedUploads, asset.name);
           }
         }
       };
@@ -265,9 +281,6 @@ export default function WorkOrderDetailScreen() {
       uploadFailure = /network request failed|network|fetch/i.test(message)
         ? 'The upload lost its network connection. Keep the app open, reconnect to Wi-Fi or cellular data, and try the remaining files again.'
         : message;
-    } finally {
-      setIsSaving(false);
-      setUploadProgress(null);
     }
     setFiles((current) => [...savedFiles, ...current]);
     if (editingCompletedWorkOrder && savedFiles.length) setHasCompletedChanges(true);
@@ -284,7 +297,8 @@ export default function WorkOrderDetailScreen() {
       }
     }
     await refreshStatus();
-    Alert.alert(kind === 'photo' ? 'Photos uploaded' : 'Invoice uploaded', kind === 'photo' ? `${savedFiles.length} photo${savedFiles.length === 1 ? '' : 's'} attached to work order ${order.work_order_number}.` : `${assets[0].name} was attached to work order ${order.work_order_number}.`);
+    Alert.alert(kind === 'photo' ? 'Photos uploaded' : kind === 'video' ? 'Videos uploaded' : 'Invoice uploaded', kind === 'photo' || kind === 'video' ? `${savedFiles.length} ${kind}${savedFiles.length === 1 ? '' : 's'} attached to work order ${order.work_order_number}.` : `${assets[0].name} was attached to work order ${order.work_order_number}.`);
+    });
   };
 
   const confirmRemovePhotos = (photos: WorkOrderFile[]) => {
@@ -298,9 +312,10 @@ export default function WorkOrderDetailScreen() {
 
   const confirmRemoveAttachment = (file: WorkOrderFile) => {
     if (isSaving) return;
-    const isPhoto = file.file_type.endsWith('_photo');
+    const isPhoto = PHOTO_MIME_TYPES.has(file.mime_type.toLowerCase());
+    const attachmentLabel = file.mime_type.toLowerCase().startsWith('video/') ? 'video' : isPhoto ? 'photo' : file.file_type === 'invoice' ? 'invoice' : 'attachment';
     Alert.alert(
-      `Remove this ${isPhoto ? 'photo' : 'invoice'}?`,
+      `Remove this ${attachmentLabel}?`,
       'This permanently removes the selected file. This cannot be undone.',
       [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => void removePhotos([file]) }],
     );
@@ -308,6 +323,7 @@ export default function WorkOrderDetailScreen() {
 
   const removePhotos = async (photos: WorkOrderFile[]) => {
     const removingOnlyPhotos = photos.every((file) => file.file_type.endsWith('_photo'));
+    const removingOnlyVideos = photos.every((file) => file.file_type === 'completion_video');
     setIsSaving(true);
     const paths = photos.map((photo) => photo.storage_path);
     const ids = photos.map((photo) => photo.id);
@@ -320,8 +336,8 @@ export default function WorkOrderDetailScreen() {
     if (editingCompletedWorkOrder) setHasCompletedChanges(true);
     await loadCurrentStatus();
     Alert.alert(
-      photos.length === 1 ? `${removingOnlyPhotos ? 'Photo' : 'Invoice'} removed` : 'Photos removed',
-      photos.length === 1 ? `The ${removingOnlyPhotos ? 'photo' : 'invoice'} was removed.` : `${photos.length} photos were removed.`,
+      photos.length === 1 ? `${removingOnlyPhotos ? 'Photo' : removingOnlyVideos ? 'Video' : 'Attachment'} removed` : 'Photos removed',
+      photos.length === 1 ? `The ${removingOnlyPhotos ? 'photo' : removingOnlyVideos ? 'video' : 'attachment'} was removed.` : `${photos.length} photos were removed.`,
     );
   };
 
@@ -376,10 +392,11 @@ export default function WorkOrderDetailScreen() {
     if (!order || !canFinalize) return;
     setIsSaving(true);
     const { data, error } = await supabase.rpc(isHomeProgress ? 'complete_home_progress' : 'finalize_work_order', { p_work_order_id: order.id });
+    if (error) { setIsSaving(false); Alert.alert('Could not finalize work order', error.message); return; }
+    const { error: emailError } = await supabase.functions.invoke('send-completion-email', { body: { workOrderId: order.id } });
     setIsSaving(false);
-    if (error) { Alert.alert('Could not finalize work order', error.message); return; }
     setOrder((current) => current ? { ...current, status: data ?? 'completed' } : current);
-    Alert.alert('Work order finalized', `${formatWorkOrderNumber(order.work_order_number)} is now available in the Complete WO tab.`);
+    Alert.alert(emailError ? 'Work order completed; email failed' : 'Work order finalized', emailError ? `${formatWorkOrderNumber(order.work_order_number)} was completed, but the completion email could not be delivered. It can be retried by completing the email function request again.` : `${formatWorkOrderNumber(order.work_order_number)} is now available in the Complete WO tab and a completion email was sent.`);
   };
 
   const saveCompletedChanges = async () => {
@@ -411,7 +428,7 @@ export default function WorkOrderDetailScreen() {
   const resetEditFields = () => {
     if (!order) return;
     setEditCustomerName(order.properties?.customer_name ?? '');
-    setEditCustomerPhone(order.properties?.customer_phone ?? '');
+    setEditCustomerPhone(phoneNumberDigits(order.properties?.customer_phone ?? ''));
     setEditAddress(order.properties?.address_line_1 ?? '');
     setEditCity(order.properties?.city ?? '');
     setEditState(order.properties?.state ?? '');
@@ -432,6 +449,55 @@ export default function WorkOrderDetailScreen() {
     if (isSaving) return;
     resetEditFields();
     setIsEditOpen(false);
+  };
+
+  const uploadAdminReference = async (kind: 'photo' | 'video') => {
+    if (!order || !contractorId || !isAdmin || isUploadingAttachments) return;
+    const isVideo = kind === 'video';
+    const limit = isVideo ? MAX_ADMIN_VIDEOS : MAX_ADMIN_PHOTOS;
+    const count = isVideo ? adminVideoCount : adminPhotoCount;
+    const remainingSlots = limit - count;
+    if (remainingSlots <= 0) { Alert.alert(`${isVideo ? 'Video' : 'Photo'} limit reached`, `Admins can attach up to ${limit} reference ${isVideo ? 'videos' : 'photos'} to a work order.`); return; }
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { Alert.alert('Media access required', 'Allow photo-library access to add work-order attachments.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: [isVideo ? 'videos' : 'images'], quality: 0.8, videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium, allowsMultipleSelection: true, selectionLimit: remainingSlots, orderedSelection: true });
+    if (result.canceled) return;
+    const assets = result.assets.slice(0, remainingSlots).map((asset, index) => ({
+      uri: asset.uri,
+      name: asset.fileName ?? `admin-${kind}-${Date.now()}-${index + 1}.${isVideo ? 'mp4' : 'jpg'}`,
+      mimeType: asset.mimeType ?? (isVideo ? 'video/mp4' : 'image/jpeg'),
+      size: asset.fileSize,
+    }));
+    const oversized = assets.find((asset) => asset.size && asset.size > MAX_UPLOAD_BYTES);
+    if (oversized) { Alert.alert('File is too large', `${oversized.name} is larger than 20 MB.`); return; }
+    void runUpload(workOrderUploadId, `Uploading admin ${isVideo ? 'videos' : 'photos'}`, assets.length, async (report) => {
+      const savedFiles: WorkOrderFile[] = [];
+      for (let index = 0; index < assets.length; index += 1) {
+        const asset = assets[index];
+        report(index, asset.name);
+        try {
+          const response = await fetch(asset.uri);
+          if (!response.ok) throw new Error(`Could not read ${asset.name}.`);
+          const bytes = await response.arrayBuffer();
+          if (bytes.byteLength > MAX_UPLOAD_BYTES) throw new Error(`${asset.name} is larger than 20 MB.`);
+          const safeName = asset.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+          const storagePath = `${contractorId}/${order.id}/admin-${Date.now()}-${index}-${safeName}`;
+          const { error: uploadError } = await supabase.storage.from('work-order-files').upload(storagePath, bytes, { contentType: asset.mimeType });
+          if (uploadError) throw new Error(uploadError.message);
+          const { data: record, error: recordError } = await supabase.from('work_order_files').insert({ work_order_id: order.id, uploaded_by: contractorId, file_type: 'other', storage_path: storagePath, original_file_name: asset.name, mime_type: asset.mimeType, file_size_bytes: asset.size ?? bytes.byteLength }).select('id, file_type, storage_path, original_file_name, mime_type, created_at, invoice_amount').single();
+          if (recordError || !record) { await supabase.storage.from('work-order-files').remove([storagePath]); throw new Error(recordError?.message ?? 'The attachment record was not created.'); }
+          const { data: signed } = await supabase.storage.from('work-order-files').createSignedUrl(storagePath, 3600);
+          savedFiles.push({ ...(record as WorkOrderFile), url: signed?.signedUrl });
+          report(index + 1, asset.name);
+        } catch (error) {
+          setFiles((current) => [...savedFiles, ...current]);
+          Alert.alert('Upload failed', error instanceof Error ? error.message : 'An attachment could not be uploaded.');
+          return;
+        }
+      }
+      setFiles((current) => [...savedFiles, ...current]);
+      Alert.alert(`${isVideo ? 'Videos' : 'Photos'} uploaded`, `${savedFiles.length} admin reference ${isVideo ? 'video' : 'photo'}${savedFiles.length === 1 ? '' : 's'} added.`);
+    });
   };
 
   const saveWorkOrderEdits = async () => {
@@ -494,10 +560,10 @@ export default function WorkOrderDetailScreen() {
   };
 
   return <SafeAreaView style={styles.safeArea} edges={['top']}>
-    <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.header} contentFit="cover">
+    <View style={styles.header}>
       <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, styles.roundedButton]} accessibilityLabel="Go back"><Ionicons name="arrow-back" size={22} color={PAPER} /></TouchableOpacity>
       <View style={styles.headerCopy}><Text style={styles.kicker}>WORK ORDER</Text><Text style={[styles.headerTitle, order?.work_order_number.startsWith('HOME-FHA-') && { color: FHA_ORANGE }]}>{order ? formatWorkOrderNumber(order.work_order_number) : 'Loading...'}</Text></View>
-    </ImageBackground>
+    </View>
     <KeyboardAvoidingView style={styles.keyboardArea} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" onScrollBeginDrag={Keyboard.dismiss} automaticallyAdjustKeyboardInsets bounces={false} alwaysBounceVertical={false} overScrollMode="never">
       {order && <>
@@ -513,7 +579,7 @@ export default function WorkOrderDetailScreen() {
         <View style={[styles.card, styles.roundedButton]}>
           <Text style={styles.sectionLabel}>SCHEDULE</Text>
           <Text style={styles.meta}>Created {new Date(order.created_at).toLocaleDateString()}</Text>
-          <Text style={styles.meta}>{order.deadline_at ? `Due ${new Date(order.deadline_at).toLocaleDateString()}` : 'No Deadline Set'}</Text>
+          <Text style={styles.meta}>{formatWorkOrderDeadline(order.deadline_at)}</Text>
         </View>
 
         <View style={[styles.card, styles.roundedButton]}>
@@ -521,7 +587,7 @@ export default function WorkOrderDetailScreen() {
           <Detail icon="person" text={order.properties?.customer_name || 'Customer not provided'} />
           <TouchableOpacity style={styles.detail} onPress={() => void callCustomer()} accessibilityRole="button" accessibilityLabel={`Call ${order.properties?.customer_name || 'customer'}`}>
             <Ionicons name="call" size={18} color={BLUE} />
-            <Text style={[styles.detailText, styles.phoneText]}>{order.properties?.customer_phone || 'Phone not provided'}</Text>
+            <Text style={[styles.detailText, styles.phoneText]}>{formatPhoneNumber(order.properties?.customer_phone) || 'Phone not provided'}</Text>
           </TouchableOpacity>
           <Detail icon="location" text={address || 'Address unavailable'} />
           <Pressable style={({ pressed }) => [styles.directionsButton, styles.roundedButton, pressed && styles.directionsButtonPressed]} onPress={() => void openDirections()} disabled={!address}><Ionicons name="navigate" size={18} color={PAPER} /><Text style={styles.directionsText}>Start Navigation</Text></Pressable>
@@ -529,9 +595,9 @@ export default function WorkOrderDetailScreen() {
 
         {isAdmin && <View style={[styles.card, styles.roundedButton]}>
           <Text style={styles.sectionLabel}>ASSIGNED CONTRACTOR</Text>
-          {assignment?.contractors ? <><View style={styles.assigneeInfo}><View style={styles.assigneeIcon}><Ionicons name="person" size={20} color={BLUE} /></View><View style={styles.assigneeCopy}><Text style={styles.assigneeName}>{assignment.contractors.full_name}</Text><Text style={styles.assigneeMeta}>{assignment.contractors.email || 'No email'}</Text><Text style={styles.assigneeMeta}>{assignment.contractors.phone_number}</Text></View></View><View style={styles.jobBrief}><Text style={styles.jobBriefLabel}>JOB BRIEF</Text><Text style={styles.jobBriefText}>{order.description}</Text></View></> : <Text style={styles.emptyText}>No contractor is currently assigned.</Text>}
+          {assignment?.contractors ? <><View style={styles.assigneeInfo}><View style={styles.assigneeIcon}><Ionicons name="person" size={20} color={BLUE} /></View><View style={styles.assigneeCopy}><Text style={styles.assigneeName}>{assignment.contractors.full_name}</Text><Text style={styles.assigneeMeta}>{assignment.contractors.email || 'No email'}</Text><Text style={styles.assigneeMeta}>{formatPhoneNumber(assignment.contractors.phone_number)}</Text></View></View><View style={styles.jobBrief}><Text style={styles.jobBriefLabel}>JOB BRIEF</Text><Text style={styles.jobBriefText}>{order.description}</Text></View></> : <Text style={styles.emptyText}>No contractor is currently assigned.</Text>}
           {!isCompleted && !isHomeProgress && <><Pressable style={({ pressed }) => [styles.reassignButton, pressed && styles.reassignButtonPressed]} onPress={() => setIsAssignmentOpen((open) => !open)} disabled={isSaving}><Ionicons name="swap-horizontal" size={18} color={PAPER} /><Text style={styles.reassignText}>Reassign Contractor</Text><Ionicons name={isAssignmentOpen ? 'chevron-up' : 'chevron-down'} size={17} color={PAPER} /></Pressable>
-          {isAssignmentOpen && <View style={styles.assigneeList}>{contractors.map((item) => <TouchableOpacity key={item.id} style={[styles.assigneeOption, item.id === assignment?.contractor_id && styles.assigneeOptionCurrent]} disabled={item.id === assignment?.contractor_id || isSaving} onPress={() => void reassignWorkOrder(item)}><View><Text style={styles.assigneeOptionName}>{item.full_name}</Text><Text style={styles.assigneeOptionMeta}>{item.email} · {item.phone_number}</Text></View>{item.id === assignment?.contractor_id && <Text style={styles.currentLabel}>CURRENT</Text>}</TouchableOpacity>)}{contractors.length === 0 && <Text style={styles.emptyText}>No active contractors are available.</Text>}</View>}</>}
+          {isAssignmentOpen && <View style={styles.assigneeList}>{contractors.map((item) => <TouchableOpacity key={item.id} style={[styles.assigneeOption, item.id === assignment?.contractor_id && styles.assigneeOptionCurrent]} disabled={item.id === assignment?.contractor_id || isSaving} onPress={() => void reassignWorkOrder(item)}><View><Text style={styles.assigneeOptionName}>{item.full_name}</Text><Text style={styles.assigneeOptionMeta}>{item.email} · {formatPhoneNumber(item.phone_number)}</Text></View>{item.id === assignment?.contractor_id && <Text style={styles.currentLabel}>CURRENT</Text>}</TouchableOpacity>)}{contractors.length === 0 && <Text style={styles.emptyText}>No active contractors are available.</Text>}</View>}</>}
         </View>}
 
         {isAdmin && isHomeProgress && <View style={[styles.card, styles.roundedButton]}>
@@ -543,7 +609,7 @@ export default function WorkOrderDetailScreen() {
           {checklistItems.map((item) => {
             const checked = completedChecklist.includes(item.id);
             return <TouchableOpacity key={item.id} style={styles.checklistItem} onPress={() => void toggleChecklistItem(item.id)} disabled={isCompleted || isSaving} accessibilityRole="checkbox" accessibilityState={{ checked, disabled: isCompleted }}>
-              <View style={[styles.checkbox, checked && styles.checkboxComplete]}>{checked && <Ionicons name="checkmark" size={15} color={PAPER} />}</View>
+              <View style={[styles.checkbox, checked && styles.checkboxComplete]}>{checked && <Ionicons name="checkmark" size={16} color={colors.primary} />}</View>
               <Text style={[styles.checklistLabel, checked && styles.checklistLabelComplete]}>{item.label}</Text>
             </TouchableOpacity>;
           })}
@@ -552,8 +618,9 @@ export default function WorkOrderDetailScreen() {
 
         {!isHomeProgress && <View style={styles.invoicePriceField}><Text style={styles.invoicePriceLabel}>INVOICE PRICE (ATTACHMENT OPTIONAL)</Text><View style={styles.invoicePriceInputRow}><Text style={styles.currency}>$</Text><TextInput style={styles.invoicePriceInput} value={invoicePrice} onChangeText={(value) => { setInvoicePrice(value); if (editingCompletedWorkOrder) setHasCompletedChanges(true); }} placeholder="0.00" placeholderTextColor={colors.textMuted} keyboardType="decimal-pad" /></View><Text style={styles.invoicePriceHelp}>Save a price with or without uploading an invoice image.</Text>{!editingCompletedWorkOrder && <Pressable style={({ pressed }) => [styles.invoiceSaveButton, { marginTop: 10 }, pressed && styles.saveButtonPressed]} onPress={() => void saveWorkOrderInvoicePrice()} disabled={isSaving}><Text style={styles.saveText}>Save Invoice Price</Text></Pressable>}</View>}
         <View style={styles.uploadRow}>
-          <TouchableOpacity style={[styles.uploadButton, styles.roundedButton, photoCount >= MAX_WORK_ORDER_PHOTOS && styles.disabled]} onPress={() => void uploadFile('photo')} disabled={isSaving || photoCount >= MAX_WORK_ORDER_PHOTOS}><Ionicons name="images" size={21} color={BLUE} /><Text style={styles.uploadText}>Upload Photos ({photoCount}/{MAX_WORK_ORDER_PHOTOS})</Text></TouchableOpacity>
-          {!isHomeProgress && <TouchableOpacity style={[styles.uploadButton, styles.roundedButton, invoiceFiles.length >= 1 && styles.disabled]} onPress={() => void uploadFile('invoice')} disabled={isSaving || invoiceFiles.length >= 1}><Ionicons name="receipt" size={21} color={BLUE} /><Text style={styles.uploadText}>{invoiceFiles.length >= 1 ? 'Invoice Attachment Added' : 'Upload Invoice Attachment'}</Text></TouchableOpacity>}
+          <Pressable style={({ pressed }) => [styles.uploadButton, pressed && styles.standardButtonPressed, (photoCount >= MAX_WORK_ORDER_PHOTOS || isUploadingAttachments) && styles.disabled]} onPress={() => void uploadFile('photo')} disabled={isSaving || isUploadingAttachments || photoCount >= MAX_WORK_ORDER_PHOTOS}><Ionicons name="images" size={21} color={PAPER} /><Text style={styles.uploadText}>Upload Photos ({photoCount}/{MAX_WORK_ORDER_PHOTOS})</Text></Pressable>
+          <Pressable style={({ pressed }) => [styles.uploadButton, pressed && styles.standardButtonPressed, (videoCount >= MAX_WORK_ORDER_VIDEOS || isUploadingAttachments) && styles.disabled]} onPress={() => void uploadFile('video')} disabled={isSaving || isUploadingAttachments || videoCount >= MAX_WORK_ORDER_VIDEOS}><Ionicons name="videocam" size={21} color={PAPER} /><Text style={styles.uploadText}>Upload Videos ({videoCount}/{MAX_WORK_ORDER_VIDEOS})</Text></Pressable>
+          {!isHomeProgress && <Pressable style={({ pressed }) => [styles.uploadButton, pressed && styles.standardButtonPressed, (invoiceFiles.length >= 1 || isUploadingAttachments) && styles.disabled]} onPress={() => void uploadFile('invoice')} disabled={isSaving || isUploadingAttachments || invoiceFiles.length >= 1}><Ionicons name="receipt" size={21} color={PAPER} /><Text style={styles.uploadText}>{invoiceFiles.length >= 1 ? 'Invoice Attachment Added' : 'Upload Invoice Attachment'}</Text></Pressable>}
         </View>
 
         <View style={[styles.card, styles.roundedButton]}>
@@ -561,8 +628,8 @@ export default function WorkOrderDetailScreen() {
           {files.map((file) => <View key={file.id} style={styles.fileRow}><TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }} disabled={!file.url} onPress={() => file.url && setPreviewFile(file)}>
             {PHOTO_MIME_TYPES.has(file.mime_type.toLowerCase()) && file.url
               ? <Image source={{ uri: file.url }} style={styles.thumbnail} contentFit="cover" />
-              : <View style={styles.fileIcon}><Ionicons name="document-text" size={22} color={BLUE} /></View>}
-            <View style={styles.fileCopy}><Text style={styles.fileName} numberOfLines={1}>{file.original_file_name}</Text><Text style={styles.fileMeta}>{file.file_type === 'invoice' ? `INVOICE ATTACHMENT · ${formatCurrency(file.invoice_amount)}` : 'WORK PERFORMED PHOTO'} · {new Date(file.created_at).toLocaleDateString()}</Text></View>
+              : <View style={styles.fileIcon}><Ionicons name={file.mime_type.toLowerCase().startsWith('video/') ? 'videocam' : 'document-text'} size={22} color={BLUE} /></View>}
+            <View style={styles.fileCopy}><Text style={styles.fileName} numberOfLines={1}>{file.original_file_name}</Text><Text style={styles.fileMeta}>{file.file_type === 'invoice' ? `INVOICE ATTACHMENT · ${formatCurrency(file.invoice_amount)}` : file.file_type === 'completion_video' ? 'WORK PERFORMED VIDEO' : file.file_type === 'other' ? 'WORK ORDER REFERENCE' : 'WORK PERFORMED PHOTO'} · {new Date(file.created_at).toLocaleDateString()}</Text></View>
             <Ionicons name="open" size={18} color={BLUE} />
           </TouchableOpacity><TouchableOpacity style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center', marginLeft: 5 }} onPress={() => confirmRemoveAttachment(file)} disabled={isSaving} accessibilityLabel={`Remove ${file.original_file_name}`}><Ionicons name="trash" size={19} color={colors.danger} /></TouchableOpacity></View>)}
           {files.length === 0 && <Text style={styles.emptyText}>{isHomeProgress ? 'No photos uploaded yet.' : 'No photos or invoices uploaded yet.'}</Text>}
@@ -596,28 +663,16 @@ export default function WorkOrderDetailScreen() {
       <View style={styles.modalBackdrop}>
         <View style={styles.previewModal}>
           <View style={styles.previewHeader}>
-            <View style={styles.previewTitleCopy}><Text style={styles.previewTitle} numberOfLines={1}>{previewFile?.original_file_name}</Text><Text style={styles.previewType}>{previewFile?.file_type === 'invoice' ? 'INVOICE ATTACHMENT' : 'JOB PHOTO'}</Text></View>
+            <View style={styles.previewTitleCopy}><Text style={styles.previewTitle} numberOfLines={1}>{previewFile?.original_file_name}</Text><Text style={styles.previewType}>{previewFile?.file_type === 'invoice' ? 'INVOICE ATTACHMENT' : previewFile?.mime_type.toLowerCase().startsWith('video/') ? 'WORK ORDER VIDEO' : 'JOB PHOTO'}</Text></View>
             <TouchableOpacity style={styles.closeButton} onPress={() => setPreviewFile(null)} accessibilityRole="button" accessibilityLabel="Close attachment preview"><Ionicons name="close" size={24} color={PAPER} /></TouchableOpacity>
           </View>
           <View style={styles.previewBody}>
             {previewFile?.url && PHOTO_MIME_TYPES.has(previewFile.mime_type.toLowerCase())
               ? <Image source={{ uri: previewFile.url }} style={styles.previewImage} contentFit="contain" />
               : previewFile?.url
-                ? <WebView source={{ uri: previewFile.url }} style={styles.pdfViewer} startInLoadingState renderLoading={() => <View style={styles.viewerLoading}><Text style={styles.viewerLoadingText}>Loading PDF...</Text></View>} />
+                ? <WebView source={{ uri: previewFile.url }} style={styles.pdfViewer} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction startInLoadingState renderLoading={() => <View style={styles.viewerLoading}><Text style={styles.viewerLoadingText}>Loading attachment...</Text></View>} />
                 : null}
           </View>
-        </View>
-      </View>
-    </Modal>
-    <Modal visible={Boolean(uploadProgress)} transparent animationType="fade" statusBarTranslucent onRequestClose={() => undefined}>
-      <View style={styles.uploadBackdrop}>
-        <View style={styles.uploadProgressCard}>
-          <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.uploadProgressTitle}>{uploadProgress?.kind === 'photo' ? 'Uploading Photos' : 'Uploading Invoice'}</Text>
-          <Text style={styles.uploadProgressMessage}>Please don&apos;t close the application or turn off your connection.</Text>
-          <View style={styles.uploadTrack}><View style={[styles.uploadFill, { width: `${Math.round(((uploadProgress?.completed ?? 0) / Math.max(uploadProgress?.total ?? 1, 1)) * 100)}%` }]} /></View>
-          <Text style={styles.uploadProgressCount}>{Math.floor(uploadProgress?.completed ?? 0)} of {uploadProgress?.total ?? 0} complete</Text>
-          <Text style={styles.uploadFileName} numberOfLines={1}>{uploadProgress?.fileName}</Text>
         </View>
       </View>
     </Modal>
@@ -627,7 +682,7 @@ export default function WorkOrderDetailScreen() {
           <View style={styles.editHeader}><Text style={styles.editHeaderTitle}>Edit Work Order</Text><TouchableOpacity style={styles.editCancel} onPress={cancelEditWorkOrder} disabled={isSaving}><Text style={styles.editCancelText}>Cancel</Text></TouchableOpacity></View>
           <ScrollView contentContainerStyle={styles.editContent} keyboardShouldPersistTaps="handled">
           <EditField label="Customer name" value={editCustomerName} onChangeText={setEditCustomerName} />
-          <EditField label="Customer phone" value={editCustomerPhone} onChangeText={setEditCustomerPhone} keyboardType="phone-pad" />
+          <EditField label="Customer phone" value={formatPhoneNumber(editCustomerPhone)} onChangeText={(phone) => setEditCustomerPhone(phoneNumberDigits(phone))} keyboardType="phone-pad" maxLength={14} />
           <EditField label="Street address" value={editAddress} onChangeText={setEditAddress} />
           <View style={styles.editLocationRow}><View style={styles.editCity}><EditField label="City" value={editCity} onChangeText={setEditCity} /></View><View style={styles.editState}><EditField label="State" value={editState} onChangeText={setEditState} autoCapitalize="characters" /></View></View>
           <EditField label="Description" value={editDescription} onChangeText={setEditDescription} multiline />
@@ -637,6 +692,14 @@ export default function WorkOrderDetailScreen() {
           <View style={styles.deadlineOptions}><TouchableOpacity style={[styles.deadlineOption, !editHasDeadline && styles.deadlineOptionSelected]} onPress={() => { setEditHasDeadline(false); setShowEditCalendar(false); }}><Ionicons name={!editHasDeadline ? 'radio-button-on' : 'radio-button-off'} size={18} color={BLUE} /><Text style={styles.deadlineText}>No deadline</Text></TouchableOpacity><TouchableOpacity style={[styles.deadlineOption, editHasDeadline && styles.deadlineOptionSelected]} onPress={() => { setEditHasDeadline(true); setShowEditCalendar(true); }}><Ionicons name={editHasDeadline ? 'radio-button-on' : 'radio-button-off'} size={18} color={BLUE} /><Text style={styles.deadlineText}>Set deadline</Text></TouchableOpacity></View>
           {editHasDeadline && <TouchableOpacity style={styles.editDateButton} onPress={() => setShowEditCalendar(true)}><Ionicons name="calendar" size={20} color={BLUE} /><Text style={styles.editDateText}>{editDeadline.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}</Text></TouchableOpacity>}
           {editHasDeadline && showEditCalendar && <DateTimePicker value={editDeadline} mode="date" display={Platform.OS === 'ios' ? 'inline' : 'calendar'} themeVariant={colorScheme} accentColor={colors.primary} onChange={(event: DateTimePickerEvent, date?: Date) => { if (Platform.OS === 'android') setShowEditCalendar(false); if (event.type === 'set' && date) setEditDeadline(date); }} />}
+          <View style={styles.adminAttachmentPanel}>
+            <Text style={styles.editLabel}>Admin reference attachments</Text>
+            <Text style={styles.adminAttachmentHelp}>Add photos or videos for the assigned worker. These do not count toward completion requirements.</Text>
+            <View style={styles.adminAttachmentActions}>
+              <Pressable style={({ pressed }) => [styles.adminAttachmentButton, pressed && styles.saveEditsPressed, (adminPhotoCount >= MAX_ADMIN_PHOTOS || isUploadingAttachments) && styles.disabled]} onPress={() => void uploadAdminReference('photo')} disabled={isUploadingAttachments || adminPhotoCount >= MAX_ADMIN_PHOTOS}><Ionicons name="images" size={19} color={PAPER} /><Text style={styles.adminAttachmentButtonText}>Photos {adminPhotoCount}/{MAX_ADMIN_PHOTOS}</Text></Pressable>
+              <Pressable style={({ pressed }) => [styles.adminAttachmentButton, pressed && styles.saveEditsPressed, (adminVideoCount >= MAX_ADMIN_VIDEOS || isUploadingAttachments) && styles.disabled]} onPress={() => void uploadAdminReference('video')} disabled={isUploadingAttachments || adminVideoCount >= MAX_ADMIN_VIDEOS}><Ionicons name="videocam" size={19} color={PAPER} /><Text style={styles.adminAttachmentButtonText}>Videos {adminVideoCount}/{MAX_ADMIN_VIDEOS}</Text></Pressable>
+            </View>
+          </View>
             <Pressable style={({ pressed }) => [styles.saveEditsButton, pressed && styles.saveEditsPressed, isSaving && styles.disabled]} onPress={() => void saveWorkOrderEdits()} disabled={isSaving}><Text style={styles.saveEditsText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text></Pressable>
           </ScrollView>
         </SafeAreaView>
@@ -647,41 +710,33 @@ export default function WorkOrderDetailScreen() {
 
 function Detail({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) { const { colors } = useAppTheme(); const styles = useMemo(() => createStyles(colors), [colors]); return <View style={styles.detail}><Ionicons name={icon} size={18} color={colors.primary} /><Text style={styles.detailText}>{text}</Text></View>; }
 function Requirement({ met, text }: { met: boolean; text: string }) { const { colors } = useAppTheme(); const styles = useMemo(() => createStyles(colors), [colors]); return <View style={styles.requirement}><Ionicons name={met ? 'checkmark-circle' : 'ellipse'} size={19} color={met ? colors.success : colors.textMuted} /><Text style={styles.requirementText}>{text}</Text></View>; }
-function EditField({ label, value, onChangeText, multiline = false, keyboardType = 'default', autoCapitalize = 'sentences' }: { label: string; value: string; onChangeText: (value: string) => void; multiline?: boolean; keyboardType?: 'default' | 'phone-pad'; autoCapitalize?: 'sentences' | 'characters' }) { const { colors } = useAppTheme(); const styles = useMemo(() => createStyles(colors), [colors]); return <View style={styles.editField}><Text style={styles.editLabel}>{label}</Text><TextInput style={[styles.editInput, multiline && styles.editMultiline]} value={value} onChangeText={onChangeText} placeholderTextColor={colors.textMuted} multiline={multiline} keyboardType={keyboardType} autoCapitalize={autoCapitalize} textAlignVertical={multiline ? 'top' : 'center'} /></View>; }
+function EditField({ label, value, onChangeText, multiline = false, keyboardType = 'default', autoCapitalize = 'sentences', maxLength }: { label: string; value: string; onChangeText: (value: string) => void; multiline?: boolean; keyboardType?: 'default' | 'phone-pad'; autoCapitalize?: 'sentences' | 'characters'; maxLength?: number }) { const { colors } = useAppTheme(); const styles = useMemo(() => createStyles(colors), [colors]); return <View style={styles.editField}><Text style={styles.editLabel}>{label}</Text><TextInput style={[styles.editInput, multiline && styles.editMultiline]} value={value} onChangeText={onChangeText} placeholderTextColor={colors.textMuted} multiline={multiline} keyboardType={keyboardType} autoCapitalize={autoCapitalize} maxLength={maxLength} textAlignVertical={multiline ? 'top' : 'center'} /></View>; }
 function formatCurrency(amount: number | null) { return amount && amount > 0 ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount) : 'PRICE NOT SET'; }
 
 const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   roundedButton: { borderRadius: 6 },
   adminActions: { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  editButton: { flex: 1, minHeight: 52, backgroundColor: '#2577BB', borderRadius: 6, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  editButtonPressed: { backgroundColor: '#1C1C5C' },
-  deleteButton: { minHeight: 52, backgroundColor: '#B3261E', borderRadius: 6, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  deleteButtonPressed: { backgroundColor: '#7F1D1D' },
+  editButton: { flex: 1, minHeight: 52, backgroundColor: '#243B5C', borderRadius: 6, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  editButtonPressed: { backgroundColor: '#0E1F35' },
+  deleteButton: { minHeight: 52, backgroundColor: '#243B5C', borderRadius: 6, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  deleteButtonPressed: { backgroundColor: '#0E1F35' },
   adminActionText: { color: PAPER, fontSize: 12, fontWeight: '900' },
   keyboardArea: { flex: 1 },
   statusLabel: { flexDirection: 'row', alignItems: 'center' },
   statusCircle: { width: 8, height: 8, borderRadius: 4, marginRight: 7 },
-  safeArea: { flex: 1, backgroundColor: colors.background }, header: { minHeight: 82, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center' }, backButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#7798BC' }, headerCopy: { marginLeft: 14 }, kicker: { color: YELLOW, fontSize: 9, fontWeight: '900', letterSpacing: 1.2 }, headerTitle: { color: PAPER, fontSize: 21, fontWeight: '900', marginTop: 4 }, content: { flexGrow: 1, backgroundColor: colors.background, padding: 20, paddingBottom: 40 }, statusRow: { flexDirection: 'row', justifyContent: 'space-between' }, status: { color: colors.primary, fontSize: 10, fontWeight: '900' }, priority: { color: colors.textMuted, fontSize: 10, fontWeight: '900' }, title: { color: colors.primary, fontSize: 25, fontWeight: '900', marginTop: 14 }, description: { color: colors.textMuted, fontSize: 14, lineHeight: 22, marginTop: 10, marginBottom: 20 }, card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 17, marginBottom: 14 }, sectionLabel: { color: colors.text, fontSize: 10, fontWeight: '900', letterSpacing: 1.1, marginBottom: 10 }, detail: { flexDirection: 'row', alignItems: 'center', marginTop: 10 }, detailText: { flex: 1, color: colors.text, fontSize: 13, lineHeight: 19, marginLeft: 10 }, phoneText: { color: colors.primary, fontWeight: '900', textDecorationLine: 'underline' }, directionsButton: { backgroundColor: '#2577BB', minHeight: 52, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 18 }, directionsButtonPressed: { backgroundColor: '#1C1C5C' }, directionsText: { color: PAPER, fontSize: 12, fontWeight: '900' }, uploadRow: { flexDirection: 'row', gap: 10, marginBottom: 14 }, uploadButton: { flex: 1, minHeight: 72, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', gap: 7 }, uploadText: { color: colors.text, fontSize: 11, fontWeight: '900' }, meta: { color: colors.text, fontSize: 13, marginTop: 8 }, noteInput: { minHeight: 88, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.input, padding: 12, color: colors.text, textAlignVertical: 'top' }, saveButton: { backgroundColor: '#2577BB', minHeight: 52, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 18 }, saveButtonPressed: { backgroundColor: '#1C1C5C' }, standardButtonPressed: { backgroundColor: '#1C1C5C' }, saveText: { color: PAPER, fontSize: 12, fontWeight: '900' }, note: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, marginTop: 14 }, noteDate: { color: colors.textMuted, fontSize: 9, fontWeight: '700' }, noteBody: { color: colors.text, fontSize: 13, lineHeight: 19, marginTop: 5 }, emptyText: { color: colors.textMuted, fontSize: 12, marginTop: 14 },
-  assigneeInfo: { flexDirection: 'row', alignItems: 'center' }, assigneeIcon: { width: 43, height: 43, backgroundColor: colors.surfaceMuted, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, assigneeCopy: { flex: 1, marginLeft: 11 }, assigneeName: { color: colors.text, fontSize: 14, fontWeight: '900' }, assigneeMeta: { color: colors.textMuted, fontSize: 10, marginTop: 3 }, reassignButton: { minHeight: 52, backgroundColor: '#2577BB', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 6, marginTop: 18 }, reassignButtonPressed: { backgroundColor: '#1C1C5C' }, reassignText: { color: PAPER, fontSize: 12, fontWeight: '900' }, assigneeList: { borderWidth: 1, borderColor: colors.border, borderRadius: 6, marginTop: 8, overflow: 'hidden' }, assigneeOption: { minHeight: 54, padding: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: colors.border }, assigneeOptionCurrent: { backgroundColor: colors.surfaceMuted }, assigneeOptionName: { color: colors.text, fontSize: 12, fontWeight: '800' }, assigneeOptionMeta: { color: colors.textMuted, fontSize: 9, marginTop: 3 }, currentLabel: { color: colors.primary, fontSize: 8, fontWeight: '900' }, modalBackdrop: { flex: 1, backgroundColor: 'rgba(8, 19, 34, 0.78)', alignItems: 'center', justifyContent: 'center', padding: 18 }, previewModal: { width: '100%', maxWidth: 720, height: '82%', backgroundColor: colors.surface, borderRadius: 10, overflow: 'hidden' }, previewHeader: { minHeight: 64, backgroundColor: colors.header, flexDirection: 'row', alignItems: 'center', paddingLeft: 16 }, previewTitleCopy: { flex: 1, paddingRight: 10 }, previewTitle: { color: PAPER, fontSize: 13, fontWeight: '800' }, previewType: { color: YELLOW, fontSize: 9, fontWeight: '900', marginTop: 4 }, closeButton: { width: 58, minHeight: 64, alignItems: 'center', justifyContent: 'center' }, previewBody: { flex: 1, backgroundColor: colors.background }, previewImage: { width: '100%', height: '100%' }, pdfViewer: { flex: 1, backgroundColor: colors.surface }, viewerLoading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface }, viewerLoadingText: { color: colors.textMuted, fontSize: 12 }, checklistHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, checklistCount: { color: colors.primary, fontSize: 15, fontWeight: '900', marginBottom: 10 }, checklistHelp: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginBottom: 8 }, checklistItem: { flexDirection: 'row', alignItems: 'center', minHeight: 42, borderTopWidth: 1, borderTopColor: colors.border }, checkbox: { width: 22, height: 22, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginRight: 10, backgroundColor: colors.surface, borderRadius: 5 }, checkboxComplete: { backgroundColor: colors.primary, borderColor: colors.primary }, checklistLabel: { color: colors.text, fontSize: 12, flex: 1 }, checklistLabelComplete: { color: colors.textMuted, textDecorationLine: 'line-through' }, disabled: { opacity: 0.45 }, fileRow: { flexDirection: 'row', alignItems: 'center', minHeight: 58, borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: 8 }, thumbnail: { width: 48, height: 48, borderRadius: 4 }, fileIcon: { width: 48, height: 48, borderRadius: 4, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' }, fileCopy: { flex: 1, marginHorizontal: 10 }, fileName: { color: colors.text, fontSize: 12, fontWeight: '800' }, fileMeta: { color: colors.textMuted, fontSize: 9, fontWeight: '700', marginTop: 4 }, requirement: { flexDirection: 'row', alignItems: 'center', marginTop: 8 }, requirementText: { color: colors.text, fontSize: 13, marginLeft: 9 }, optionalText: { color: colors.textMuted, fontSize: 12, marginTop: 12 }, readyHint: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 14 }, finalizeButton: { minHeight: 48, backgroundColor: colors.success, alignItems: 'center', justifyContent: 'center', marginTop: 16 }, finalizePressed: { opacity: 0.8 }, finalizeText: { color: PAPER, fontSize: 13, fontWeight: '900' }, completedBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 48, backgroundColor: colors.surfaceMuted, marginTop: 16, gap: 8 }, completedText: { color: colors.success, fontSize: 12, fontWeight: '900' }, saveChangesButton: { minHeight: 52, marginTop: 16, paddingHorizontal: 14, backgroundColor: '#2577BB', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  safeArea: { flex: 1, backgroundColor: colors.background }, header: { minHeight: 82, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.header }, backButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5, borderColor: '#7798BC' }, headerCopy: { marginLeft: 14 }, kicker: { color: '#60A5FA', fontSize: 9, fontWeight: '900', letterSpacing: 1.2 }, headerTitle: { color: PAPER, fontSize: 21, fontWeight: '900', marginTop: 4 }, content: { flexGrow: 1, backgroundColor: colors.background, padding: 20, paddingBottom: 40 }, statusRow: { flexDirection: 'row', justifyContent: 'space-between' }, status: { color: colors.primary, fontSize: 10, fontWeight: '900' }, priority: { color: colors.textMuted, fontSize: 10, fontWeight: '900' }, title: { color: colors.primary, fontSize: 25, fontWeight: '900', marginTop: 14 }, description: { color: colors.textMuted, fontSize: 14, lineHeight: 22, marginTop: 10, marginBottom: 20 }, card: { backgroundColor: colors.surface, borderWidth: 0.5, borderColor: colors.border, padding: 17, marginBottom: 14 }, sectionLabel: { color: colors.text, fontSize: 10, fontWeight: '900', letterSpacing: 1.1, marginBottom: 10 }, detail: { flexDirection: 'row', alignItems: 'center', marginTop: 10 }, detailText: { flex: 1, color: colors.text, fontSize: 13, lineHeight: 19, marginLeft: 10 }, phoneText: { color: colors.primary, fontWeight: '900', textDecorationLine: 'underline' }, directionsButton: { backgroundColor: '#243B5C', minHeight: 52, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 18 }, directionsButtonPressed: { backgroundColor: '#0E1F35' }, directionsText: { color: PAPER, fontSize: 12, fontWeight: '900' }, uploadRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 }, uploadButton: { flexGrow: 1, flexBasis: 105, minHeight: 72, backgroundColor: '#243B5C', paddingHorizontal: 12, borderRadius: 6, alignItems: 'center', justifyContent: 'center', gap: 8 }, uploadText: { color: PAPER, fontSize: 11, fontWeight: '900', textAlign: 'center' }, meta: { color: colors.text, fontSize: 13, marginTop: 8 }, noteInput: { minHeight: 88, borderWidth: 0.5, borderColor: colors.border, backgroundColor: colors.input, padding: 12, color: colors.text, textAlignVertical: 'top' }, saveButton: { backgroundColor: '#243B5C', minHeight: 52, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 18 }, saveButtonPressed: { backgroundColor: '#0E1F35' }, standardButtonPressed: { backgroundColor: '#0E1F35' }, saveText: { color: PAPER, fontSize: 12, fontWeight: '900' }, note: { borderTopWidth: 0.5, borderTopColor: colors.border, paddingTop: 12, marginTop: 14 }, noteDate: { color: colors.textMuted, fontSize: 9, fontWeight: '700' }, noteBody: { color: colors.text, fontSize: 13, lineHeight: 19, marginTop: 5 }, emptyText: { color: colors.textMuted, fontSize: 12, marginTop: 14 },
+  assigneeInfo: { flexDirection: 'row', alignItems: 'center' }, assigneeIcon: { width: 43, height: 43, backgroundColor: colors.surfaceMuted, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, assigneeCopy: { flex: 1, marginLeft: 11 }, assigneeName: { color: colors.text, fontSize: 14, fontWeight: '900' }, assigneeMeta: { color: colors.textMuted, fontSize: 10, marginTop: 3 }, reassignButton: { minHeight: 52, backgroundColor: '#243B5C', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 6, marginTop: 18 }, reassignButtonPressed: { backgroundColor: '#0E1F35' }, reassignText: { color: PAPER, fontSize: 12, fontWeight: '900' }, assigneeList: { borderWidth: 0.5, borderColor: colors.border, borderRadius: 6, marginTop: 8, overflow: 'hidden' }, assigneeOption: { minHeight: 54, padding: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 0.5, borderTopColor: colors.border }, assigneeOptionCurrent: { backgroundColor: colors.surfaceMuted }, assigneeOptionName: { color: colors.text, fontSize: 12, fontWeight: '800' }, assigneeOptionMeta: { color: colors.textMuted, fontSize: 9, marginTop: 3 }, currentLabel: { color: colors.primary, fontSize: 8, fontWeight: '900' }, modalBackdrop: { flex: 1, backgroundColor: 'rgba(8, 19, 34, 0.78)', alignItems: 'center', justifyContent: 'center', padding: 18 }, previewModal: { width: '100%', maxWidth: 720, height: '82%', backgroundColor: colors.surface, borderRadius: 10, overflow: 'hidden' }, previewHeader: { minHeight: 64, backgroundColor: colors.header, flexDirection: 'row', alignItems: 'center', paddingLeft: 16 }, previewTitleCopy: { flex: 1, paddingRight: 10 }, previewTitle: { color: PAPER, fontSize: 13, fontWeight: '800' }, previewType: { color: YELLOW, fontSize: 9, fontWeight: '900', marginTop: 4 }, closeButton: { width: 58, minHeight: 64, alignItems: 'center', justifyContent: 'center' }, previewBody: { flex: 1, backgroundColor: colors.background }, previewImage: { width: '100%', height: '100%' }, pdfViewer: { flex: 1, backgroundColor: colors.surface }, viewerLoading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface }, viewerLoadingText: { color: colors.textMuted, fontSize: 12 }, checklistHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, checklistCount: { color: colors.primary, fontSize: 15, fontWeight: '900', marginBottom: 10 }, checklistHelp: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginBottom: 8 }, checklistItem: { flexDirection: 'row', alignItems: 'center', minHeight: 42, borderTopWidth: 0.5, borderTopColor: colors.border }, checkbox: { width: 22, height: 22, borderWidth: 0.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginRight: 10, backgroundColor: colors.surface, borderRadius: 5 }, checkboxComplete: { backgroundColor: colors.surface, borderColor: colors.primary, borderWidth: 1.5 }, checklistLabel: { color: colors.text, fontSize: 12, flex: 1 }, checklistLabelComplete: { color: colors.textMuted, textDecorationLine: 'line-through' }, disabled: { opacity: 0.45 }, fileRow: { flexDirection: 'row', alignItems: 'center', minHeight: 58, borderTopWidth: 0.5, borderTopColor: colors.border, paddingVertical: 8 }, thumbnail: { width: 48, height: 48, borderRadius: 4 }, fileIcon: { width: 48, height: 48, borderRadius: 4, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' }, fileCopy: { flex: 1, marginHorizontal: 10 }, fileName: { color: colors.text, fontSize: 12, fontWeight: '800' }, fileMeta: { color: colors.textMuted, fontSize: 9, fontWeight: '700', marginTop: 4 }, requirement: { flexDirection: 'row', alignItems: 'center', marginTop: 8 }, requirementText: { color: colors.text, fontSize: 13, marginLeft: 9 }, optionalText: { color: colors.textMuted, fontSize: 12, marginTop: 12 }, readyHint: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 14 }, finalizeButton: { minHeight: 52, backgroundColor: '#243B5C', paddingHorizontal: 12, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginTop: 16 }, finalizePressed: { backgroundColor: '#0E1F35' }, finalizeText: { color: PAPER, fontSize: 13, fontWeight: '900' }, completedBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 48, backgroundColor: colors.surfaceMuted, marginTop: 16, gap: 8 }, completedText: { color: colors.success, fontSize: 12, fontWeight: '900' }, saveChangesButton: { minHeight: 52, marginTop: 16, paddingHorizontal: 14, backgroundColor: '#243B5C', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   jobBrief: { backgroundColor: colors.surfaceMuted, borderRadius: 6, padding: 12, marginTop: 14 },
   jobBriefLabel: { color: colors.primary, fontSize: 8, fontWeight: '900', letterSpacing: 0.9 },
   jobBriefText: { color: colors.text, fontSize: 12, lineHeight: 18, marginTop: 5 },
-  invoicePriceField: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 6, padding: 14, marginBottom: 10 },
+  invoicePriceField: { backgroundColor: colors.surface, borderWidth: 0.5, borderColor: colors.border, borderRadius: 6, padding: 14, marginBottom: 10 },
   invoicePriceLabel: { color: colors.text, fontSize: 9, fontWeight: '900', letterSpacing: 0.9, marginBottom: 7 },
-  invoicePriceInputRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.input, borderRadius: 6 },
+  invoicePriceInputRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', borderWidth: 0.5, borderColor: colors.border, backgroundColor: colors.input, borderRadius: 6 },
   currency: { color: colors.text, fontSize: 17, fontWeight: '900', marginLeft: 13 },
   invoicePriceInput: { flex: 1, minHeight: 46, color: colors.text, paddingHorizontal: 8, fontSize: 15 },
   invoicePriceHelp: { color: colors.textMuted, fontSize: 9, marginTop: 7 },
-  invoiceEditRow: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, marginTop: 10, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
-  invoiceSaveButton: { minHeight: 48, backgroundColor: '#2577BB', paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
-  uploadBackdrop: { flex: 1, backgroundColor: 'rgba(2, 8, 18, 0.78)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  uploadProgressCard: { width: '100%', maxWidth: 420, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 24, alignItems: 'center' },
-  uploadProgressTitle: { color: colors.text, fontSize: 18, fontWeight: '900', marginTop: 14 },
-  uploadProgressMessage: { color: colors.textMuted, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 8 },
-  uploadTrack: { width: '100%', height: 10, backgroundColor: colors.surfaceMuted, borderRadius: 5, overflow: 'hidden', marginTop: 20 },
-  uploadFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 5 },
-  uploadProgressCount: { color: colors.text, fontSize: 11, fontWeight: '900', marginTop: 10 },
-  uploadFileName: { width: '100%', color: colors.textMuted, fontSize: 9, textAlign: 'center', marginTop: 7 },
+  invoiceEditRow: { borderTopWidth: 0.5, borderTopColor: colors.border, paddingTop: 12, marginTop: 10, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  invoiceSaveButton: { minHeight: 48, backgroundColor: '#243B5C', paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
   editSafeArea: { flex: 1, backgroundColor: colors.background },
   editHeader: { minHeight: 66, backgroundColor: NAVY, paddingLeft: 20, flexDirection: 'row', alignItems: 'center' },
   editHeaderTitle: { flex: 1, color: PAPER, fontSize: 20, fontWeight: '900' },
@@ -690,23 +745,28 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   editContent: { padding: 20, paddingBottom: 40, backgroundColor: colors.background },
   editField: { marginBottom: 15 },
   editLabel: { color: colors.text, fontSize: 11, fontWeight: '800', marginBottom: 7, marginTop: 4 },
-  editInput: { minHeight: 48, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.input, borderRadius: 6, paddingHorizontal: 12, color: colors.text, fontSize: 13 },
+  editInput: { minHeight: 48, borderWidth: 0.5, borderColor: colors.border, backgroundColor: colors.input, borderRadius: 6, paddingHorizontal: 12, color: colors.text, fontSize: 13 },
   editMultiline: { minHeight: 96, paddingTop: 12 },
   editLocationRow: { flexDirection: 'row', gap: 10 },
   editCity: { flex: 1 },
   editState: { width: 92 },
   priorityOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 15 },
-  priorityOption: { minHeight: 40, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  priorityOptionSelected: { borderColor: colors.primary, backgroundColor: colors.surfaceMuted },
+  priorityOption: { minHeight: 40, paddingHorizontal: 12, borderWidth: 0.5, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  priorityOptionSelected: { borderColor: '#0E1F35', backgroundColor: '#0E1F35' },
   priorityOptionText: { color: colors.textMuted, fontSize: 9, fontWeight: '900' },
   priorityOptionTextSelected: { color: colors.primaryStrong },
   deadlineOptions: { flexDirection: 'row', gap: 9 },
-  deadlineOption: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  deadlineOptionSelected: { borderColor: colors.primary, backgroundColor: colors.surfaceMuted },
+  deadlineOption: { flex: 1, minHeight: 44, borderWidth: 0.5, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  deadlineOptionSelected: { borderColor: '#0E1F35', backgroundColor: '#0E1F35' },
   deadlineText: { color: colors.text, fontSize: 11, fontWeight: '800' },
-  editDateButton: { minHeight: 54, marginTop: 9, paddingHorizontal: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  editDateButton: { minHeight: 54, marginTop: 9, paddingHorizontal: 13, borderWidth: 0.5, borderColor: colors.border, backgroundColor: '#243B5C', borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 10 },
   editDateText: { flex: 1, color: colors.text, fontSize: 12, fontWeight: '800' },
-  saveEditsButton: { minHeight: 52, backgroundColor: '#2577BB', borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginTop: 22, paddingHorizontal: 12 },
-  saveEditsPressed: { backgroundColor: '#1C1C5C' },
+  adminAttachmentPanel: { marginTop: 20, padding: 14, borderWidth: 0.5, borderColor: colors.border, borderRadius: 6, backgroundColor: colors.surface },
+  adminAttachmentHelp: { color: colors.textMuted, fontSize: 10, lineHeight: 15, marginBottom: 10 },
+  adminAttachmentActions: { flexDirection: 'row', gap: 9 },
+  adminAttachmentButton: { flex: 1, minHeight: 54, borderRadius: 6, backgroundColor: '#243B5C', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 8 },
+  adminAttachmentButtonText: { color: PAPER, fontSize: 10, fontWeight: '900', textAlign: 'center' },
+  saveEditsButton: { minHeight: 52, backgroundColor: '#243B5C', borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginTop: 22, paddingHorizontal: 12 },
+  saveEditsPressed: { backgroundColor: '#0E1F35' },
   saveEditsText: { color: PAPER, fontSize: 12, fontWeight: '900' },
 });

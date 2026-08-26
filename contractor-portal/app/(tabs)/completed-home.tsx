@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ImageBackground } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -14,7 +13,7 @@ import { formatWorkOrderNumber } from '@/lib/work-order-number';
 import { useWorkOrderRealtime } from '@/hooks/use-work-order-realtime';
 
 const PAPER = '#FFFFFF';
-const YELLOW = '#FFF200';
+const YELLOW = '#1D4ED8';
 
 type CompletedHome = {
   id: string;
@@ -31,7 +30,7 @@ type CompletedHome = {
 };
 
 export default function CompletedHomeScreen() {
-  const { colors } = useAppTheme();
+  const { themeMode, colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const [homes, setHomes] = useState<CompletedHome[]>([]);
@@ -79,10 +78,10 @@ export default function CompletedHomeScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <ImageBackground source={require('@/assets/images/dark-blue-particle-texture-background.jpg')} style={styles.header} contentFit="cover">
+        <View style={styles.header}>
           <View><Text style={styles.kicker}>ADMIN ONLY</Text><Text style={styles.title}>Complete Home</Text></View>
-          <Ionicons name="home" size={29} color={YELLOW} />
-        </ImageBackground>
+          <Ionicons name="home" size={29} color={themeMode === 'black' ? PAPER : YELLOW} />
+        </View>
 
         <View style={styles.intro}>
           <Ionicons name="archive" size={23} color={colors.primary} />
@@ -124,12 +123,12 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   emptyText: { color: colors.textMuted, fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 6 },
   denied: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   deniedTitle: { color: colors.text, fontSize: 16, fontWeight: '900', marginTop: 12 },
-  card: { padding: 17, marginBottom: 13, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  card: { padding: 17, marginBottom: 13, borderRadius: 9, borderWidth: 0.5, borderColor: colors.border, backgroundColor: colors.surface },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   status: { color: WORK_ORDER_STATUS_COLORS.completed, fontSize: 10, fontWeight: '900' },
   id: { color: colors.textMuted, fontSize: 9, fontWeight: '700' },
   homeName: { color: colors.text, fontSize: 18, fontWeight: '900', marginTop: 14 },
   address: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 7 },
-  footer: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  footer: { marginTop: 16, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   footerLabel: { color: WORK_ORDER_STATUS_COLORS.completed, fontSize: 9, fontWeight: '900' },
 });

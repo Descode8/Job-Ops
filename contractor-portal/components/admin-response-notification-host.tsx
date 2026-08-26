@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText as Text } from '@/components/app-typography';
@@ -19,6 +19,9 @@ export function AdminResponseNotificationHost() {
   const { colors } = useAppTheme();
   const [notices, setNotices] = useState<ResponseNotice[]>([]);
   const notice = notices[0] ?? null;
+  const lastNotice = useRef<ResponseNotice | null>(null);
+  if (notice) lastNotice.current = notice;
+  const displayedNotice = notice ?? lastNotice.current;
 
   useEffect(() => {
     let disposed = false;
@@ -49,7 +52,7 @@ export function AdminResponseNotificationHost() {
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `contractor_id=eq.${admin.id}` }, (payload) => {
           const row = payload.new as { id?: string; work_order_id?: string | null; title?: string; message?: string };
           const normalizedTitle = row.title?.toLowerCase();
-          if (!row.id || !row.title || !row.message || (normalizedTitle !== 'work order accepted' && normalizedTitle !== 'Work Order Rejected')) return;
+          if (!row.id || !row.title || !row.message || (normalizedTitle !== 'work order accepted' && normalizedTitle !== 'work order rejected')) return;
           setNotices((current) => current.some((item) => item.id === row.id) ? current : [...current, { id: row.id!, workOrderId: row.work_order_id ?? null, title: row.title!, message: row.message!, accepted: normalizedTitle === 'work order accepted' }]);
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'work_order_offers' }, (payload) => {
@@ -81,14 +84,14 @@ export function AdminResponseNotificationHost() {
     }
   };
 
-  const accent = notice?.accepted ? '#35A767' : '#DC2626';
+  const accent = displayedNotice?.accepted ? '#35A767' : '#DC2626';
   return <Modal visible={Boolean(notice)} transparent animationType="fade" statusBarTranslucent onRequestClose={() => undefined}>
     <View style={styles.backdrop}>
       <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-        <View style={[styles.icon, { backgroundColor: accent }]}><Ionicons name={notice?.accepted ? 'checkmark' : 'close'} size={30} color="#FFFFFF" /></View>
+        <View style={[styles.icon, { backgroundColor: accent }]}><Ionicons name={displayedNotice?.accepted ? 'checkmark' : 'close'} size={30} color="#FFFFFF" /></View>
         <Text style={[styles.kicker, { color: accent }]}>WORK ORDER RESPONSE</Text>
-        <Text style={[styles.title, { color: colors.text }]}>{notice?.title}</Text>
-        <Text style={[styles.message, { color: colors.textMuted }]}>{notice?.message}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{displayedNotice?.title}</Text>
+        <Text style={[styles.message, { color: colors.textMuted }]}>{displayedNotice?.message}</Text>
         <Pressable style={({ pressed }) => [styles.openButton, pressed && styles.openButtonPressed]} onPress={() => void acknowledgeNotice()}><Text style={styles.openButtonText}>OK</Text></Pressable>
       </View>
     </View>
@@ -97,13 +100,13 @@ export function AdminResponseNotificationHost() {
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(2, 8, 18, 0.78)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  card: { width: '100%', maxWidth: 430, borderWidth: 1, borderRadius: 18, padding: 24, alignItems: 'center' },
+  card: { width: '100%', maxWidth: 430, borderWidth: 0.5, borderRadius: 18, padding: 24, alignItems: 'center' },
   icon: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   kicker: { fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
   title: { fontSize: 22, lineHeight: 28, fontWeight: '900', textAlign: 'center', marginTop: 7 },
   message: { fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 12 },
-  openButton: { width: '100%', minHeight: 52, borderRadius: 8, backgroundColor: '#2577BB', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 22 },
-  openButtonPressed: { backgroundColor: '#1C1C5C' },
+  openButton: { width: '100%', minHeight: 52, borderRadius: 6, backgroundColor: '#243B5C', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 22 },
+  openButtonPressed: { backgroundColor: '#0E1F35' },
   openButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   dismissButton: { minHeight: 42, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', marginTop: 7 },
   dismissText: { fontSize: 11, fontWeight: '800' },

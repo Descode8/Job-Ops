@@ -86,14 +86,14 @@ export function AssignmentNotificationHost() {
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(2, 8, 18, 0.78)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  card: { width: '100%', maxWidth: 430, borderWidth: 1, borderRadius: 18, padding: 24, alignItems: 'center' },
+  card: { width: '100%', maxWidth: 430, borderWidth: 0.5, borderRadius: 18, padding: 24, alignItems: 'center' },
   icon: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   kicker: { fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
   title: { fontSize: 21, lineHeight: 28, fontWeight: '900', textAlign: 'center', marginTop: 7 },
   number: { fontSize: 13, fontWeight: '900', marginTop: 18 },
   customer: { fontSize: 13, textAlign: 'center', marginTop: 7 },
-  openButton: { width: '100%', minHeight: 52, borderRadius: 8, backgroundColor: '#2577BB', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 22 },
-  openButtonPressed: { backgroundColor: '#1C1C5C' },
+  openButton: { width: '100%', minHeight: 52, borderRadius: 6, backgroundColor: '#243B5C', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 22 },
+  openButtonPressed: { backgroundColor: '#0E1F35' },
   openButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   dismissButton: { minHeight: 42, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', marginTop: 7 },
   dismissText: { fontSize: 11, fontWeight: '800' },

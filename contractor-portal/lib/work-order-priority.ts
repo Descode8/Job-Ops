@@ -8,7 +8,7 @@ const PRIORITY_RANK: Record<string, number> = {
 const PRIORITY_COLORS: Record<string, string> = {
   emergency: '#DC2626',
   high: '#F97316',
-  medium: '#FFF200',
+  medium: '#FFB020',
   low: '#8B97A5',
 };
 

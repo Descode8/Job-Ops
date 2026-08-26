@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useEffect, useState } from 'react';
 
 import { CarouselTabBar } from '@/components/carousel-tab-bar';
@@ -34,6 +35,13 @@ export default function TabLayout() {
         options={{
           title: isAdmin ? 'Services' : 'Work Orders',
           tabBarIcon: ({ color }) => <MaterialCommunityIcons size={28} name="tools" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="schedule"
+        options={{
+          title: 'Calendar',
+          tabBarIcon: ({ color }) => <Ionicons size={28} name="calendar" color={color} />,
         }}
       />
       <Tabs.Screen
