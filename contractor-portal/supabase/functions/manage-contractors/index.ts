@@ -14,7 +14,7 @@ Deno.serve(async (request) => {
     if (!user) throw new Error('Authentication required');
 
     const adminClient = createClient(url, serviceKey);
-    const { data: admin } = await adminClient.from('contractors').select('id, is_admin').eq('auth_user_id', user.id).eq('is_active', true).single();
+    const { data: admin } = await adminClient.from('contractors').select('id, full_name, is_admin').eq('auth_user_id', user.id).eq('is_active', true).single();
     if (!admin?.is_admin) return json({ error: 'Admin access required' }, 403);
 
     const body = await request.json();
@@ -22,6 +22,7 @@ Deno.serve(async (request) => {
       const email = String(body.email ?? '').trim().toLowerCase();
       const fullName = String(body.fullName ?? '').trim();
       const phoneNumber = String(body.phoneNumber ?? '').trim();
+      const smsConsent = body.smsConsent === true;
       if (!email || !fullName || !phoneNumber) throw new Error('Name, email, and phone are required');
       const phoneDigits = phoneNumber.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
       if (phoneDigits.length !== 10) throw new Error('Enter a 10-digit US phone number');
@@ -46,9 +47,12 @@ Deno.serve(async (request) => {
       const temporaryPassword = createTemporaryPassword();
       const { data: created, error: createError } = await adminClient.auth.admin.createUser({ email, password: temporaryPassword, email_confirm: true, user_metadata: { display_name: fullName } });
       if (createError || !created.user) throw createError ?? new Error('Account creation failed');
-      const { error: profileError } = await adminClient.from('contractors').insert({ auth_user_id: created.user.id, full_name: fullName, phone_number: authPhone, email, role: 'contractor', is_admin: false, is_active: true, must_change_password: true });
+      const { error: profileError } = await adminClient.from('contractors').insert({ auth_user_id: created.user.id, full_name: fullName, phone_number: authPhone, email, role: 'contractor', is_admin: false, is_active: true, must_change_password: true, sms_consent: smsConsent, sms_consent_at: smsConsent ? new Date().toISOString() : null, sms_consent_source: smsConsent ? 'contractor_onboarding_attestation' : null, sms_consent_disclosure_version: smsConsent ? '2026-08-29' : null });
       if (profileError) { await adminClient.auth.admin.deleteUser(created.user.id); throw profileError; }
-      return json({ message: 'Contractor created', username: email, phoneUsername: phoneDigits, temporaryPassword });
+      const smsResult = smsConsent
+        ? await sendContractorInvitation(authPhone, `JobOps by Descode LLC: ${admin.full_name} has invited you to join JobOps. Your username is: ${email}. Your temporary password is: ${temporaryPassword}. Reply STOP to unsubscribe.`)
+        : { smsSent: false, smsError: 'SMS consent was not recorded, so no invitation text was sent.' };
+      return json({ message: 'Contractor created', username: email, phoneUsername: phoneDigits, temporaryPassword, ...smsResult });
     }
 
     if (body.action === 'delete') {
@@ -73,6 +77,30 @@ function json(body: object, status = 200) { return new Response(JSON.stringify(b
 function createTemporaryPassword() {
   const bytes = crypto.getRandomValues(new Uint8Array(9));
   return `Mw!${Array.from(bytes, (value) => (value % 36).toString(36)).join('')}7`;
+}
+
+async function sendContractorInvitation(to: string, body: string) {
+  const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
+  const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
+  const fromNumber = Deno.env.get('TWILIO_FROM_NUMBER');
+  if (!accountSid || !authToken || !fromNumber) return { smsSent: false, smsError: 'Twilio is not configured yet.' };
+  try {
+    const form = new URLSearchParams({ From: fromNumber, To: to, Body: body });
+    const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    });
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('Contractor invitation SMS failed:', response.status, errorBody);
+      return { smsSent: false, smsError: 'Twilio could not deliver the invitation text.' };
+    }
+    return { smsSent: true, smsError: null };
+  } catch (error) {
+    console.error('Contractor invitation SMS failed:', error);
+    return { smsSent: false, smsError: 'The invitation text could not be sent.' };
+  }
 }
 
 async function deleteContractorData(adminClient: ReturnType<typeof createClient>, contractorId: string) {

@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { formatWorkOrderNumber } from '@/lib/work-order-number';
 import { workOrderPriorityColor as getWorkOrderPriorityColor } from '@/lib/work-order-priority';
 import { formatPhoneNumber, phoneNumberDigits } from '@/lib/phone-number';
+import { notifyWorkOrderSms } from '@/lib/work-order-sms';
 
 const YELLOW = '#1D4ED8';
 const BLUE = '#1D4ED8';
@@ -200,6 +201,7 @@ export default function WorkOrderScreen() {
       try { await uploadAttachments(workOrderId); }
       catch (error) { attachmentError = error instanceof Error ? error.message : 'An attachment could not be uploaded.'; }
     }
+    if (workOrderId) notifyWorkOrderSms(workOrderId, 'work_order_created', undefined, assigneeId);
     const { error: emailError } = workOrderId
       ? await supabase.functions.invoke('send-work-order', { body: { workOrderId, recipientEmail: WORK_ORDER_RECIPIENT } })
       : { error: new Error('The database did not return a work-order ID.') };
@@ -327,7 +329,7 @@ export default function WorkOrderScreen() {
 
         <View style={styles.formActions}>
           <Pressable style={({ pressed }) => [styles.cancelButton, pressed && styles.cancelButtonPressed]} onPress={clearForm} disabled={isSubmitting}><Text style={styles.cancelText}>Cancel</Text></Pressable>
-          <Pressable style={({ pressed }) => [styles.submitButton, pressed && styles.submitButtonPressed]} onPress={submitWorkOrder} disabled={isSubmitting}><Text style={styles.submitText}>{isSubmitting ? 'Saving work order...' : 'Create Work Order'}</Text></Pressable>
+          <Pressable style={({ pressed }) => [styles.submitButton, pressed && styles.submitButtonPressed]} onPress={submitWorkOrder} disabled={isSubmitting}><Text style={styles.submitText}>{isSubmitting ? 'Saving Work Order...' : 'Create Work Order'}</Text></Pressable>
         </View>
       </ScrollView>
       </KeyboardAvoidingView>
@@ -369,7 +371,7 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   keyboardAvoidingView: { flex: 1, backgroundColor: colors.background },
   content: { flexGrow: 1, backgroundColor: colors.background, paddingHorizontal: 20, paddingBottom: 35 },
-  header: { backgroundColor: '#000000', marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  header: { backgroundColor: colors.header, marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   kicker: { color: YELLOW, fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginBottom: 8 },
   title: { color: PAPER, fontSize: 27, fontWeight: '900' },
   headerIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },

@@ -27,12 +27,12 @@ export type AppThemeColors = {
 
 const palettes: Record<ThemeMode, AppThemeColors> = {
   light: {
-    background: '#F3F7FC', surface: '#FFFFFF', surfaceElevated: '#FFFFFF', surfaceMuted: '#DCEAF7',
-    text: '#09192D', textMuted: '#405C78', border: '#9FB8D1', primary: '#1D4ED8', primaryStrong: '#1E3A8A',
-    header: '#09192D', accent: '#1D4ED8', danger: '#D9364F', success: '#168A5B', input: '#F7FAFD',
+    background: 'transparent', surface: 'rgba(255, 255, 255, 0.84)', surfaceElevated: 'rgba(251, 254, 252, 0.96)', surfaceMuted: 'rgba(235, 242, 251, 0.78)',
+    text: '#09192D', textMuted: '#52657D', border: '#AABBD0', primary: '#1D4ED8', primaryStrong: '#1E3A8A',
+    header: '#09192D', accent: '#1D4ED8', danger: '#D9364F', success: '#168A5B', input: 'rgba(248, 250, 255, 0.82)',
   },
   dark: {
-    background: '#050B14', surface: '#0F172A', surfaceElevated: '#0F172A', surfaceMuted: '#0F172A',
+    background: 'rgba(0, 0, 0, 0)', surface: '#0F172A', surfaceElevated: '#0F172A', surfaceMuted: '#0F172A',
     text: '#F7FAFF', textMuted: '#9FB7D5', border: '#243B5C', primary: '#1D4ED8', primaryStrong: '#2563EB',
     header: '#09192D', accent: '#1D4ED8', danger: '#FF5A5F', success: '#28D17C', input: '#0F172A',
   },

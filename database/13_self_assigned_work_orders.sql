@@ -53,7 +53,7 @@ begin
     work_order_number, property_id, title, description, kind, priority,
     deadline_at, created_by, recipient_email
   ) values (
-    v_work_order_number, v_property_id, 'Work order for ' || trim(p_customer_name),
+    v_work_order_number, v_property_id, 'Work Order Request from: ' || trim(p_customer_name),
     trim(p_description), 'other', 'medium', null, v_creator_id, 'jhumphries@shopmwhs.net'
   ) returning id into v_work_order_id;
 

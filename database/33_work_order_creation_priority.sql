@@ -45,7 +45,7 @@ begin
 
   v_work_order_number := 'MW-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
   insert into public.work_orders (work_order_number, property_id, title, description, kind, priority, deadline_at, created_by, recipient_email)
-  values (v_work_order_number, v_property_id, 'Work order for ' || trim(p_customer_name), trim(p_description), 'other', p_priority, p_deadline_at, v_sender_id, 'jhumphries@shopmwhs.net')
+  values (v_work_order_number, v_property_id, 'Work Order Request from: ' || trim(p_customer_name), trim(p_description), 'other', p_priority, p_deadline_at, v_sender_id, 'jhumphries@shopmwhs.net')
   returning id into v_work_order_id;
 
   if p_recipient_id = v_sender_id then

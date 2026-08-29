@@ -1,4 +1,4 @@
--- Send newly created work orders to the Marty Wright work-order inbox.
+-- Send newly created work orders to the JobOps work-order inbox.
 
 create or replace function public.create_and_offer_work_order(
   p_customer_name text,
@@ -41,7 +41,7 @@ begin
 
   v_work_order_number := 'MW-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
   insert into public.work_orders (work_order_number, property_id, title, description, kind, priority, deadline_at, created_by, recipient_email)
-  values (v_work_order_number, v_property_id, 'Work order for ' || trim(p_customer_name), trim(p_description), 'other', 'medium', p_deadline_at, v_sender_id, 'jhumphries@shopmwhs.net')
+  values (v_work_order_number, v_property_id, 'Work Order Request from: ' || trim(p_customer_name), trim(p_description), 'other', 'medium', p_deadline_at, v_sender_id, 'jhumphries@shopmwhs.net')
   returning id into v_work_order_id;
 
   if p_recipient_id = v_sender_id then

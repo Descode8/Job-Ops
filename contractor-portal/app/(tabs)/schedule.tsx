@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText as Text } from '@/components/app-typography';
@@ -10,6 +10,7 @@ import { useWorkOrderRealtime } from '@/hooks/use-work-order-realtime';
 import { formatWorkOrderNumber } from '@/lib/work-order-number';
 import { workOrderPriorityColor } from '@/lib/work-order-priority';
 import { supabase } from '@/lib/supabase';
+import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
 
 const PAPER = '#FFFFFF';
 const BLUE = '#1D4ED8';
@@ -49,6 +50,7 @@ export default function ScheduleScreen() {
     setJobs(assigned); setCompletedJobs(allAssigned.filter((job) => job.status === 'completed')); setIsLoading(false);
   }, []);
 
+  const { isRefreshing, onRefresh } = usePullToRefresh(loadSchedule);
   useFocusEffect(useCallback(() => { void loadSchedule(); }, [loadSchedule]));
   useWorkOrderRealtime(() => { void loadSchedule(); });
 
@@ -64,7 +66,7 @@ export default function ScheduleScreen() {
   const changeMonth = (amount: number) => { const next = new Date(month.getFullYear(), month.getMonth() + amount, 1); setMonth(next); setSelectedDate(next); };
   const openJob = (id: string) => router.push({ pathname: '/work-order/[id]', params: { id } });
 
-  return <SafeAreaView style={styles.safe} edges={['top']}><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+  return <SafeAreaView style={styles.safe} edges={['top']}><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
     <View style={styles.header}><View><Text style={styles.kicker}>JOBOPS</Text><Text style={styles.title}>Scheduled Calendar</Text><Text style={styles.subtitle}>{isAdmin ? 'ALL ASSIGNED WORK' : 'YOUR ASSIGNED WORK'}</Text></View><View style={styles.headerIcon}><Ionicons name="calendar" size={28} color={themeMode === 'black' ? PAPER : BLUE} /></View></View>
     <View style={styles.calendarCard}>
       <View style={styles.monthHeader}><Pressable style={({ pressed }) => [styles.monthButton, pressed && styles.pressed]} onPress={() => changeMonth(-1)} accessibilityLabel="Previous month"><Ionicons name="chevron-back" size={21} color={PAPER} /></Pressable><Text style={styles.monthTitle}>{month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</Text><Pressable style={({ pressed }) => [styles.monthButton, pressed && styles.pressed]} onPress={() => changeMonth(1)} accessibilityLabel="Next month"><Ionicons name="chevron-forward" size={21} color={PAPER} /></Pressable></View>

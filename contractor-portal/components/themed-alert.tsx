@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
@@ -9,11 +10,13 @@ type AlertButton = {
   text?: string;
   onPress?: () => void;
   style?: 'default' | 'cancel' | 'destructive';
+  icon?: number;
 };
 
 type AlertOptions = {
   cancelable?: boolean;
   onDismiss?: () => void;
+  showCloseButton?: boolean;
 };
 
 type AlertRequest = {
@@ -80,6 +83,16 @@ export function ThemedAlertHost() {
           accessibilityRole="alert"
           style={styles.dialog}
           onPress={(event) => event.stopPropagation()}>
+          {activeAlert?.options?.showCloseButton && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={10}
+              onPress={dismissFromBackdrop}
+              style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </Pressable>
+          )}
           <View style={styles.iconCircle}>
             <Ionicons name="information-circle" size={26} color={colors.primaryStrong} />
           </View>
@@ -96,11 +109,13 @@ export function ThemedAlertHost() {
                   onPress={() => dismiss(button)}
                   style={({ pressed }) => [
                     styles.button,
-                    primary && styles.primaryButton,
+                    button.icon ? styles.logoButton : undefined,
+                    primary && !button.icon && styles.primaryButton,
                     destructive && styles.destructiveButton,
-                    pressed && styles.pressedButton,
+                    pressed && (button.icon ? styles.logoButtonPressed : styles.pressedButton),
                   ]}>
-                  <Text style={[styles.buttonText, primary && styles.primaryButtonText, destructive && styles.destructiveButtonText]}>
+                  {button.icon && <View style={styles.buttonLogoFrame}><Image source={button.icon} style={styles.buttonLogo} contentFit="contain" cachePolicy="memory-disk" accessibilityLabel={`${button.text ?? 'Maps'} logo`} /></View>}
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.buttonText, button.icon ? styles.logoButtonText : undefined, primary && !button.icon && styles.primaryButtonText, destructive && styles.destructiveButtonText]}>
                     {button.text ?? 'OK'}
                   </Text>
                 </Pressable>
@@ -135,6 +150,8 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
     shadowRadius: 24,
     elevation: 12,
   },
+  closeButton: { position: 'absolute', top: 14, right: 14, zIndex: 1, width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
+  closeButtonPressed: { backgroundColor: colors.surfaceMuted },
   iconCircle: {
     width: 44,
     height: 44,
@@ -158,6 +175,11 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
     borderColor: '#2577BB',
     backgroundColor: '#243B5C',
   },
+  logoButton: { minHeight: 94, paddingHorizontal: 4, paddingVertical: 6, gap: 8, borderWidth: 0, backgroundColor: 'transparent' },
+  logoButtonPressed: { backgroundColor: colors.surfaceMuted },
+  logoButtonText: { color: colors.text },
+  buttonLogoFrame: { width: 64, height: 64, padding: 5, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
+  buttonLogo: { width: 54, height: 54 },
   primaryButton: { borderColor: '#243B5C', backgroundColor: '#243B5C' },
   destructiveButton: { borderColor: '#243B5C', backgroundColor: '#243B5C' },
   pressedButton: { borderColor: '#0E1F35', backgroundColor: '#0E1F35' },

@@ -14,7 +14,7 @@ values
   ('meter', 'Meter', 2),
   ('hvac', 'HVAC', 3),
   ('underpinning', 'Underpinning', 4),
-  ('steps_decks', 'Steps / decks', 5),
+  ('steps_decks', 'Steps / Decks', 5),
   ('well', 'Well', 6),
   ('septic', 'Septic', 7),
   ('plumbing_tie_in', 'Plumbing tie-in', 8),

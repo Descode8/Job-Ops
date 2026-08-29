@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText as Text } from '@/components/app-typography';
 import { ThemedAlert as Alert } from '@/components/themed-alert';
 import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
 import { WORK_ORDER_STATUS_COLORS, WORK_ORDER_STATUS_FONT } from '@/lib/work-order-status';
 import { formatWorkOrderNumber } from '@/lib/work-order-number';
 import { useWorkOrderRealtime } from '@/hooks/use-work-order-realtime';
@@ -68,6 +69,7 @@ export default function CompletedHomeScreen() {
     setIsLoading(false);
   }, []);
 
+  const { isRefreshing, onRefresh } = usePullToRefresh(loadCompletedHomes);
   useFocusEffect(useCallback(() => { void loadCompletedHomes(); }, [loadCompletedHomes]));
   useWorkOrderRealtime(() => { void loadCompletedHomes(); });
 
@@ -77,7 +79,7 @@ export default function CompletedHomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
         <View style={styles.header}>
           <View><Text style={styles.kicker}>ADMIN ONLY</Text><Text style={styles.title}>Complete Home</Text></View>
           <Ionicons name="home" size={29} color={themeMode === 'black' ? PAPER : YELLOW} />

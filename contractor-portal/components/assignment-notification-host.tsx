@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
@@ -17,7 +17,9 @@ type AssignmentNotice = {
 export function AssignmentNotificationHost() {
   const { colors } = useAppTheme();
   const router = useRouter();
+  const segments = useSegments();
   const [notice, setNotice] = useState<AssignmentNotice | null>(null);
+  const canShowNotification = segments[0] === '(tabs)' || segments[0] === 'work-order';
 
   useEffect(() => {
     let disposed = false;
@@ -32,7 +34,7 @@ export function AssignmentNotificationHost() {
     const listenForAssignments = async (userId?: string) => {
       const version = ++listenerVersion;
       stopChannel();
-      if (!userId) return;
+      if (!userId) { setNotice(null); return; }
       const { data: contractor } = await supabase.from('contractors').select('id, is_admin').eq('auth_user_id', userId).eq('is_active', true).maybeSingle();
       if (disposed || version !== listenerVersion || !contractor || contractor.is_admin) return;
 
@@ -69,7 +71,7 @@ export function AssignmentNotificationHost() {
     router.push({ pathname: '/work-order/[id]', params: { id: workOrderId } });
   };
 
-  return <Modal visible={Boolean(notice)} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setNotice(null)}>
+  return <Modal visible={Boolean(notice) && canShowNotification} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setNotice(null)}>
     <View style={styles.backdrop}>
       <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
         <View style={[styles.icon, { backgroundColor: colors.primary }]}><Ionicons name="briefcase" size={28} color="#FFFFFF" /></View>

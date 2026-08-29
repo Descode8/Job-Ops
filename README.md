@@ -1,6 +1,6 @@
 ## Run: npx.cmd expo start --tunnel --clear
 
-# Marty Wright Contractor Portal
+# JobOps Contractor Portal
 
 ## Run the App
 
@@ -37,7 +37,7 @@ npm run web           # Start the app in a web browser
 
 > **A mobile-first job management platform for contractors and office staff.**
 
-The Marty Wright Contractor Portal will let contractors securely sign in with a username and password, view assigned work, update job progress, capture field photos, upload invoices and receipts, and submit completed work from a mobile device. Office staff will use a companion web dashboard to assign jobs, review submissions, approve or reject work, and generate reports.
+The JobOps Contractor Portal will let contractors securely sign in with a username and password, view assigned work, update job progress, capture field photos, upload invoices and receipts, and submit completed work from a mobile device. Office staff will use a companion web dashboard to assign jobs, review submissions, approve or reject work, and generate reports.
 
 ## Table of Contents
 
@@ -245,7 +245,7 @@ The initial database structure is documented in [database/](database/README.md).
 
 ### Work Order Creation and Email
 
-1. An authorized user completes the New Work Order form.
+1. An authorized user completes the New Work Order Request from:m.
 2. The form validates the title, property address, description, recipient email, priority, and deadline.
 3. The server creates the work-order record and assigns its ID.
 4. A server-side function sends the work-order details to the submitted recipient email.
@@ -354,7 +354,7 @@ You do not need Xcode or Android Studio to begin. Later, Xcode on a Mac is neede
 
 - Assigned-job dashboard
 - Separate Service tab and service-request workflow
-- New Work Order form with recipient email field
+- New Work Order Request from:m with recipient email field
 - Job-detail screen
 - Status updates
 - Home-address completion checklist
@@ -397,7 +397,7 @@ The first release should include only the workflow required to assign, perform, 
 - Assigned-job list and job details
 - Completed-work-order history in the **Complete WO** tab
 - Separate Service tab
-- New Work Order form and email delivery workflow
+- New Work Order Request from:m and email delivery workflow
 - Priority and status display
 - Home completion checklist with all required property tasks
 - Notes, photos, and document uploads

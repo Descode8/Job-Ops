@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { WORK_ORDER_STATUS_FONT, workOrderStatusColor } from '@/lib/work-order-status';
 import { formatWorkOrderNumber } from '@/lib/work-order-number';
 import { formatWorkOrderDeadline } from '@/lib/work-order-deadline';
+import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
 import { compareWorkOrderPriority, workOrderPriorityColor as getWorkOrderPriorityColor } from '@/lib/work-order-priority';
 import { useWorkOrderRealtime } from '@/hooks/use-work-order-realtime';
 
@@ -79,6 +80,7 @@ export default function ServicesScreen() {
     setIsLoading(false);
   }, []);
 
+  const { isRefreshing, onRefresh } = usePullToRefresh(loadJobs);
   useFocusEffect(useCallback(() => { void loadJobs(); }, [loadJobs]));
   useWorkOrderRealtime(() => { void loadJobs(); });
 
@@ -98,7 +100,7 @@ export default function ServicesScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={[styles.content, { flexGrow: 0 }]} showsVerticalScrollIndicator={false} bounces={false} alwaysBounceVertical={false} overScrollMode="never">
+      <ScrollView contentContainerStyle={[styles.content, { flexGrow: 0 }]} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
         <View style={styles.header}><View><Text style={styles.kicker}>JOBOPS</Text><Text style={styles.title}>Assigned Work Orders</Text></View>{isAdmin && <TouchableOpacity style={[styles.filterButton, { backgroundColor: 'transparent', borderRadius: 0 }]} accessibilityLabel="Toggle complete work orders" onPress={() => setShowCompleted((value) => !value)}><Ionicons name="checkmark-done" size={28} color={themeMode === 'black' ? PAPER : YELLOW} /></TouchableOpacity>}</View>
         <View style={styles.summaryRow}><Summary value={activeJobs.length} label="ACTIVE" /><Summary value={activeJobs.filter(isUrgent).length} label="URGENT" /><Summary value={activeJobs.filter(needsParts).length} label="NEEDS PARTS" /></View>
         <View style={styles.filters}><FilterButton label="Active" selected={filter === 'active'} onPress={() => setFilter('active')} /><FilterButton label="Needs Parts" selected={filter === 'parts'} onPress={() => setFilter('parts')} /><FilterButton label="Urgent" selected={filter === 'urgent'} onPress={() => setFilter('urgent')} /></View>

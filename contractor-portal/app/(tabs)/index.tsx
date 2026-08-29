@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
@@ -16,6 +16,10 @@ import { formatWorkOrderDeadline } from '@/lib/work-order-deadline';
 import { compareWorkOrderPriority, workOrderPriorityColor } from '@/lib/work-order-priority';
 import { useWorkOrderRealtime } from '@/hooks/use-work-order-realtime';
 import { formatPhoneNumber, phoneNumberDigits } from '@/lib/phone-number';
+import { mapChoices, openMapDirections } from '@/lib/map-directions';
+import { MediaCarouselModal } from '@/components/media-carousel-modal';
+import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
+import { notifyWorkOrderSms } from '@/lib/work-order-sms';
 
 const YELLOW = '#1D4ED8';
 const NAVY = '#09192D';
@@ -49,6 +53,11 @@ export default function HomeScreen() {
   const [isClearConfirmationOpen, setIsClearConfirmationOpen] = useState(false);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const [respondingOfferId, setRespondingOfferId] = useState<string | null>(null);
+  const [viewingOffer, setViewingOffer] = useState<WorkOrderOffer | null>(null);
+  const [viewingOfferMedia, setViewingOfferMedia] = useState<OfferMedia[]>([]);
+  const [isLoadingOfferMedia, setIsLoadingOfferMedia] = useState(false);
+  const [activeOfferMediaId, setActiveOfferMediaId] = useState<string | null>(null);
+  const [suspendedOffer, setSuspendedOffer] = useState<WorkOrderOffer | null>(null);
   const [isFlowInfoVisible, setIsFlowInfoVisible] = useState(false);
   const [glanceFilter, setGlanceFilter] = useState<GlanceFilter | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,6 +110,7 @@ export default function HomeScreen() {
       setNotifications(unreadNotices);
       setIsLoading(false);
   }, []);
+  const { isRefreshing, onRefresh } = usePullToRefresh(loadDashboard);
 
   useFocusEffect(
     useCallback(() => {
@@ -109,6 +119,14 @@ export default function HomeScreen() {
     }, [loadDashboard]),
   );
   useWorkOrderRealtime(() => { void loadDashboard(); });
+  useEffect(() => {
+    if (!contractorId) return;
+    const offerChannel = supabase
+      .channel(`home-work-order-offers-${contractorId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'work_order_offers', filter: `recipient_id=eq.${contractorId}` }, () => { void loadDashboard(); })
+      .subscribe();
+    return () => { void supabase.removeChannel(offerChannel); };
+  }, [contractorId, loadDashboard]);
   useEffect(() => { const timer = setInterval(() => setCurrentTime(Date.now()), 60_000); return () => clearInterval(timer); }, []);
   useEffect(() => {
     if (!contractorId) return;
@@ -152,19 +170,26 @@ export default function HomeScreen() {
   const avatarInitials = contractorName.split(' ').filter(Boolean).map((name) => name[0]).join('').slice(0, 2).toUpperCase() || 'CT';
   const greeting = new Date().getHours() < 12 ? 'Good Morning' : new Date().getHours() < 18 ? 'Good Afternoon' : 'Good Evening';
 
-  const openDirections = async () => {
+  const openDirections = () => {
     if (!currentWorkOrder?.properties) return;
-    const url = `https://maps.apple.com/?daddr=${encodeURIComponent(formatAddress(currentWorkOrder.properties))}&dirflg=d`;
-    const supported = await Linking.canOpenURL(url);
-    if (supported) {
+    const choices = mapChoices(formatAddress(currentWorkOrder.properties));
+    Alert.alert('Select Navigation', 'Select the app you want to use for directions.', [
+      ...choices.map((choice) => ({ text: choice.label, icon: choice.icon, onPress: () => void startDirections(choice.url) })),
+    ], { cancelable: true, showCloseButton: true });
+  };
+
+  const startDirections = async (url: string) => {
+    if (!currentWorkOrder) return;
+    try {
       if (currentWorkOrder.status === 'not_started') {
         const { data, error } = await supabase.rpc('mark_work_order_started', { p_work_order_id: currentWorkOrder.id, p_action: 'navigation_started' });
         if (error) Alert.alert('Could not update work order', error.message);
         else setWorkOrders((orders) => orders.map((item) => item.id === currentWorkOrder.id ? { ...item, status: data ?? 'in_progress' } : item));
       }
-      await Linking.openURL(url);
+      await openMapDirections(url);
+    } catch (error) {
+      Alert.alert('Could not open maps', error instanceof Error ? error.message : 'No maps application is available on this device.');
     }
-    else Alert.alert('Could not open maps', 'No maps application is available on this device.');
   };
 
   const openProfile = () => {
@@ -212,24 +237,55 @@ export default function HomeScreen() {
 
   const respondToOffer = async (offerId: string, response: 'accepted' | 'rejected') => {
     setRespondingOfferId(offerId);
-    const { error } = await supabase.rpc('respond_to_work_order_offer', {
-      p_offer_id: offerId,
-      p_response: response,
-    });
-    setRespondingOfferId(null);
-
-    if (error) {
-      Alert.alert('Could not respond', error.message);
-      return;
+    try {
+      const respondedOffer = pendingOffers.find((offer) => offer.offer_id === offerId) ?? (viewingOffer?.offer_id === offerId ? viewingOffer : null);
+      const { error } = await withTimeout(supabase.rpc('respond_to_work_order_offer', { p_offer_id: offerId, p_response: response }), 15_000);
+      if (error) throw error;
+      if (respondedOffer) notifyWorkOrderSms(respondedOffer.work_order_id, response === 'accepted' ? 'offer_accepted' : 'offer_rejected');
+      setViewingOffer((current) => current?.offer_id === offerId ? null : current);
+      setSuspendedOffer(null);
+      setActiveOfferMediaId(null);
+      setViewingOfferMedia([]);
+      setPendingOffers((current) => current.filter((offer) => offer.offer_id !== offerId));
+      await loadDashboard();
+    } catch (error) {
+      Alert.alert('Could not respond', errorMessage(error));
+    } finally {
+      setRespondingOfferId(null);
     }
+  };
 
-    Alert.alert(
-      response === 'accepted' ? 'Work Order Accepted' : 'Work Order Rejected',
-      response === 'accepted'
-        ? 'The work order is now assigned to you.'
-        : 'The work order has been assigned back to the contractor who sent it.',
-    );
-    await loadDashboard();
+  const viewOffer = async (offer: WorkOrderOffer) => {
+    setViewingOffer(offer);
+    setViewingOfferMedia([]);
+    setIsLoadingOfferMedia(true);
+    try {
+      const { data, error } = await withTimeout(supabase.rpc('get_pending_offer_media', { p_offer_id: offer.offer_id }), 15_000);
+      if (error) throw error;
+      const signedMedia = await Promise.all(((data ?? []) as Omit<OfferMedia, 'url'>[]).map(async (file) => {
+        const { data: signed, error: signError } = await supabase.storage.from('work-order-files').createSignedUrl(file.storage_path, 3600);
+        return { ...file, url: signError ? undefined : signed?.signedUrl };
+      }));
+      setViewingOfferMedia(signedMedia);
+    } catch (error) {
+      Alert.alert('Could not load attachments', errorMessage(error));
+    } finally {
+      setIsLoadingOfferMedia(false);
+    }
+  };
+
+  const openOfferPicture = (fileId: string) => {
+    if (!viewingOffer) return;
+    setSuspendedOffer(viewingOffer);
+    setViewingOffer(null);
+    setTimeout(() => setActiveOfferMediaId(fileId), 280);
+  };
+
+  const closeOfferPicture = () => {
+    setActiveOfferMediaId(null);
+    const offerToRestore = suspendedOffer;
+    setSuspendedOffer(null);
+    if (offerToRestore) setTimeout(() => setViewingOffer(offerToRestore), 280);
   };
 
   const openNotificationLog = async () => {
@@ -288,8 +344,8 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
+        <View style={[styles.topBar, themeMode !== 'black' && styles.expandedTopBar]}>
           <TouchableOpacity
             style={styles.notificationButton}
             accessibilityLabel="Open menu"
@@ -302,7 +358,7 @@ export default function HomeScreen() {
             <Ionicons name="menu" size={26} color={PAPER} />
           </TouchableOpacity>
           <View style={styles.brand}>
-            <Image source={require('@/assets/images/JobOps_logo_v2.png')} style={styles.logo} contentFit="contain" />
+            <Image source={require('@/assets/images/JobOps_alt.png')} style={styles.logo} contentFit="contain" />
             <Text style={styles.brandTitle}>JobOps</Text>
           </View>
           <View style={styles.headerActions}>
@@ -315,7 +371,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           {isHeaderMenuOpen && (
-            <View style={styles.headerMenu}>
+            <View style={[styles.headerMenu, themeMode !== 'black' && styles.expandedHeaderMenu]}>
               <TouchableOpacity style={styles.headerMenuItem} onPress={openProfile} accessibilityRole="menuitem">
                 <Ionicons name="person-circle" size={20} color={colors.primary} />
                 <Text style={styles.headerMenuText}>Profile</Text>
@@ -348,7 +404,7 @@ export default function HomeScreen() {
         {pendingOffers.length > 0 && (
           <View style={styles.offersSection}>
             <View style={styles.offerHeadingRow}>
-              <Ionicons name="notifications" size={20} color={NAVY} />
+              <Ionicons name="notifications" size={20} color={colorScheme === 'dark' || themeMode === 'black' ? PAPER : NAVY} />
               <Text style={styles.offerHeading}>WORK ORDERS WAITING FOR YOUR RESPONSE</Text>
             </View>
             {pendingOffers.map((offer) => (
@@ -360,16 +416,22 @@ export default function HomeScreen() {
                 <Text style={styles.offerDescription}>{offer.description}</Text>
                 <View style={styles.offerActions}>
                   <TouchableOpacity
-                    style={[styles.offerButton, styles.rejectButton]}
+                    style={[styles.offerButton, styles.viewOfferButton]}
                     disabled={respondingOfferId === offer.offer_id}
-                    onPress={() => void respondToOffer(offer.offer_id, 'rejected')}>
-                    <Text style={styles.rejectButtonText}>Reject</Text>
+                    onPress={() => void viewOffer(offer)}>
+                    <Text style={styles.viewOfferButtonText}>View</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.offerButton, styles.acceptButton]}
                     disabled={respondingOfferId === offer.offer_id}
                     onPress={() => void respondToOffer(offer.offer_id, 'accepted')}>
                     <Text style={styles.acceptButtonText}>{respondingOfferId === offer.offer_id ? 'Saving...' : 'Accept'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.offerButton, styles.rejectButton]}
+                    disabled={respondingOfferId === offer.offer_id}
+                    onPress={() => void respondToOffer(offer.offer_id, 'rejected')}>
+                    <Text style={styles.rejectButtonText}>Reject</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -448,6 +510,40 @@ export default function HomeScreen() {
         </View>
 
       </ScrollView>
+      <Modal visible={Boolean(viewingOffer)} transparent animationType="fade" onRequestClose={() => setViewingOffer(null)} statusBarTranslucent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.offerPreviewModal}>
+            <View style={styles.offerPreviewHeader}>
+              <View style={styles.offerPreviewHeading}>
+                <Text style={styles.offerPreviewKicker}>WORK ORDER REQUEST FROM</Text>
+                <Text style={styles.offerPreviewSenderName}>{viewingOffer?.sender_name || 'JobOps User'}</Text>
+                <Text style={styles.offerPreviewNumber}>{formatWorkOrderNumber(viewingOffer?.work_order_number)}</Text>
+              </View>
+              <TouchableOpacity style={styles.modalClose} onPress={() => setViewingOffer(null)} accessibilityLabel="Close work order details"><Ionicons name="close" size={24} color={PAPER} /></TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={styles.offerPreviewContent}>
+              <Text style={styles.offerPreviewLabel}>TITLE</Text><Text style={styles.offerPreviewValue}>{viewingOffer?.title || 'Not provided'}</Text>
+              <Text style={styles.offerPreviewLabel}>CUSTOMER</Text><Text style={styles.offerPreviewValue}>{viewingOffer?.customer_name || 'Not provided'}</Text>
+              <Text style={styles.offerPreviewLabel}>PHONE</Text><Text style={styles.offerPreviewValue}>{formatPhoneNumber(viewingOffer?.customer_phone || '') || 'Not provided'}</Text>
+              <Text style={styles.offerPreviewLabel}>SERVICE ADDRESS</Text><Text style={styles.offerPreviewValue}>{viewingOffer?.customer_address || 'Not provided'}</Text>
+              <Text style={styles.offerPreviewLabel}>WORK REQUESTED</Text><Text style={styles.offerPreviewDescription}>{viewingOffer?.description || 'No description provided.'}</Text>
+              <Text style={styles.offerPreviewLabel}>CREATOR ATTACHMENTS</Text>
+              {isLoadingOfferMedia && <Text style={styles.offerPreviewEmpty}>Loading pictures and videos...</Text>}
+              {!isLoadingOfferMedia && viewingOfferMedia.map((file) => file.mime_type.toLowerCase().startsWith('image/') && file.url
+                ? <TouchableOpacity key={file.id} onPress={() => openOfferPicture(file.id)}><Image source={{ uri: file.url }} style={styles.offerPreviewImage} contentFit="cover" /><Text style={styles.offerPreviewMediaName}>{file.original_file_name}</Text></TouchableOpacity>
+                : <TouchableOpacity key={file.id} disabled={!file.url} style={styles.offerPreviewMediaLink} onPress={() => openOfferPicture(file.id)}><Ionicons name="play-circle" size={22} color={PAPER} /><Text style={styles.offerPreviewMediaLinkText}>{file.original_file_name || 'Play video'}</Text><Ionicons name="chevron-forward" size={18} color={PAPER} /></TouchableOpacity>)}
+              {!isLoadingOfferMedia && viewingOfferMedia.length === 0 && <Text style={styles.offerPreviewEmpty}>No pictures or videos were attached by the creator.</Text>}
+              <Text style={styles.offerPreviewSender}>Sent by {viewingOffer?.sender_name}</Text>
+            </ScrollView>
+            <View style={styles.offerPreviewActions}>
+              <TouchableOpacity style={[styles.offerPreviewAction, styles.acceptButton]} disabled={Boolean(respondingOfferId)} onPress={() => viewingOffer && void respondToOffer(viewingOffer.offer_id, 'accepted')}><Text style={styles.acceptButtonText}>{respondingOfferId ? 'Saving...' : 'Accept'}</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.offerPreviewAction, styles.rejectButton]} disabled={Boolean(respondingOfferId)} onPress={() => viewingOffer && void respondToOffer(viewingOffer.offer_id, 'rejected')}><Text style={styles.rejectButtonText}>Reject</Text></TouchableOpacity>
+            </View>
+            <TouchableOpacity style={styles.offerPreviewCancel} onPress={() => setViewingOffer(null)}><Text style={styles.offerPreviewCancelText}>Back to Offers</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      <MediaCarouselModal items={viewingOfferMedia} activeId={activeOfferMediaId} onClose={closeOfferPicture} />
       <Modal visible={Boolean(glanceFilter)} transparent animationType="fade" onRequestClose={() => setGlanceFilter(null)} statusBarTranslucent>
         <View style={styles.glanceBackdrop}>
           <BlurView intensity={45} tint={colorScheme === 'dark' ? 'dark' : 'light'} experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
@@ -535,6 +631,7 @@ type WorkOrderOffer = {
   customer_address: string;
   created_at: string;
 };
+type OfferMedia = { id: string; storage_path: string; original_file_name: string; mime_type: string; url?: string };
 
 function formatAddress(property: WorkOrder['properties']) {
   if (!property) return 'Address unavailable';
@@ -578,15 +675,16 @@ function withTimeout<T>(operation: PromiseLike<T>, timeoutMs = 12_000): Promise<
   ]);
 }
 
-function errorMessage(error: unknown) { return error instanceof Error ? error.message : 'An unexpected error occurred.'; }
+function errorMessage(error: unknown) { return error instanceof Error ? error.message : typeof error === 'object' && error !== null && 'message' in error ? String(error.message) : 'An unexpected error occurred.'; }
 
 const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: 20, paddingBottom: 32, backgroundColor: colors.background },
   topBar: { height: 68, marginHorizontal: -20, paddingHorizontal: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, backgroundColor: colors.header, borderBottomWidth: 0.5, borderBottomColor: colors.border },
+  expandedTopBar: { height: 101, paddingHorizontal: 20 },
   menuDismissLayer: { ...StyleSheet.absoluteFillObject, zIndex: 9 },
   brand: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  logo: { width: 36, height: 36 },
+  logo: { width: 50, height: 50 },
   brandTitle: { color: PAPER, fontSize: 27, fontWeight: '900' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 1 },
   notificationButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', position: 'relative' },
@@ -596,6 +694,7 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   headerAvatarFallback: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#243B5C', borderWidth: 0.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   headerAvatarText: { color: PAPER, fontSize: 12, fontWeight: '900' },
   headerMenu: { position: 'absolute', left: 12, top: 56, minWidth: 170, backgroundColor: colors.surfaceElevated, borderWidth: 0.5, borderColor: colors.border, borderRadius: 6, zIndex: 10, elevation: 5, shadowColor: '#000000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  expandedHeaderMenu: { left: 20, top: 73 },
   headerMenuItem: { minHeight: 48, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerMenuText: { color: colors.text, fontSize: 13, fontWeight: '900' },
   offersSection: { marginBottom: 20 },
@@ -608,10 +707,32 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   offerDescription: { color: colors.text, fontSize: 12, lineHeight: 18, marginTop: 10 },
   offerActions: { flexDirection: 'row', gap: 10, marginTop: 15 },
   offerButton: { flex: 1, minHeight: 52, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
+  viewOfferButton: { backgroundColor: '#243B5C' },
   rejectButton: { borderWidth: 0.5, borderColor: '#243B5C', backgroundColor: '#243B5C' },
   acceptButton: { backgroundColor: '#243B5C' },
   rejectButtonText: { color: PAPER, fontSize: 12, fontWeight: '900' },
   acceptButtonText: { color: PAPER, fontSize: 12, fontWeight: '900' },
+  viewOfferButtonText: { color: PAPER, fontSize: 12, fontWeight: '900' },
+  offerPreviewModal: { width: '100%', maxWidth: 500, maxHeight: '84%', borderRadius: 12, overflow: 'hidden', backgroundColor: colors.surfaceElevated, borderWidth: 0.5, borderColor: colors.border },
+  offerPreviewHeader: { minHeight: 72, paddingLeft: 18, backgroundColor: NAVY, flexDirection: 'row', alignItems: 'center' },
+  offerPreviewHeading: { flex: 1 },
+  offerPreviewKicker: { color: '#9FB7D5', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  offerPreviewSenderName: { color: PAPER, fontSize: 17, fontWeight: '900', marginTop: 4 },
+  offerPreviewNumber: { color: PAPER, fontSize: 18, fontWeight: '900', marginTop: 5 },
+  offerPreviewContent: { padding: 20 },
+  offerPreviewLabel: { color: colors.primary, fontSize: 9, fontWeight: '900', letterSpacing: 0.9, marginTop: 15 },
+  offerPreviewValue: { color: colors.text, fontSize: 14, lineHeight: 21, fontWeight: '800', marginTop: 5 },
+  offerPreviewDescription: { color: colors.text, fontSize: 14, lineHeight: 22, marginTop: 5 },
+  offerPreviewImage: { width: '100%', height: 210, borderRadius: 8, marginTop: 10, backgroundColor: colors.surfaceMuted },
+  offerPreviewMediaName: { color: colors.textMuted, fontSize: 10, marginTop: 5 },
+  offerPreviewMediaLink: { minHeight: 50, marginTop: 10, paddingHorizontal: 14, borderRadius: 6, backgroundColor: '#243B5C', flexDirection: 'row', alignItems: 'center', gap: 9 },
+  offerPreviewMediaLinkText: { flex: 1, color: PAPER, fontSize: 11, fontWeight: '900' },
+  offerPreviewEmpty: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 8 },
+  offerPreviewSender: { color: colors.textMuted, fontSize: 10, fontWeight: '800', marginTop: 22 },
+  offerPreviewActions: { flexDirection: 'row', gap: 10, paddingHorizontal: 20 },
+  offerPreviewAction: { flex: 1, minHeight: 52, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  offerPreviewCancel: { minHeight: 48, alignItems: 'center', justifyContent: 'center', margin: 12 },
+  offerPreviewCancelText: { color: colors.textMuted, fontSize: 12, fontWeight: '900' },
   greetingRow: { paddingTop: 20, paddingBottom: 20 },
   eyebrow: { color: colors.textMuted, fontSize: 11, fontWeight: '700', marginTop: 5 },
   greeting: { color: colors.text, fontSize: 20, fontWeight: '900' },
@@ -623,7 +744,7 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   summaryLabel: { color: colors.primary, fontSize: 10, fontWeight: '900', letterSpacing: 1.25 },
   summaryStats: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 7, marginTop: 21 },
   summaryStat: { flex: 1, minHeight: 78, paddingTop: 6, paddingBottom: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceMuted, borderWidth: 0.5, borderColor: colors.border, borderRadius: 7 },
-  summaryNumber: { color: colors.background === '#F3F7FC' ? '#000000' : PAPER, fontSize: 31, fontWeight: '900' },
+  summaryNumber: { color: colors.background === 'transparent' ? '#000000' : PAPER, fontSize: 31, fontWeight: '900' },
   summaryText: { color: colors.textMuted, fontSize: 10, fontWeight: '600', marginTop: 2 },
   summaryActionIcon: { marginTop: 5 },
   summaryDivider: { display: 'none' },
@@ -665,7 +786,7 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   jobMeta: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
   arrowButton: { backgroundColor: '#243B5C', width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
   actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  actionButton: { backgroundColor: colors.background === '#F3F7FC' ? '#C8DAEC' : colors.background === '#000000' ? '#18181B' : '#243B5C', width: '48%', minHeight: 94, padding: 15, justifyContent: 'space-between', borderWidth: 0.5, borderColor: colors.background === '#F3F7FC' ? '#7FA1C4' : colors.border, borderRadius: 6 },
+  actionButton: { backgroundColor: colors.background === 'transparent' ? '#C8DAEC' : colors.background === '#000000' ? '#18181B' : '#243B5C', width: '48%', minHeight: 94, padding: 15, justifyContent: 'space-between', borderWidth: 0.5, borderColor: colors.background === 'transparent' ? '#7FA1C4' : colors.border, borderRadius: 6 },
   actionLabel: { color: colors.text, fontSize: 12, fontWeight: '900', maxWidth: 100 },
   glanceBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: 'rgba(0, 0, 0, 0.32)' },
   glanceModal: { width: '100%', maxWidth: 560, maxHeight: '72%', backgroundColor: colors.surfaceElevated, borderWidth: 0.5, borderColor: colors.border, borderRadius: 16, overflow: 'hidden', elevation: 16, shadowColor: '#000000', shadowOpacity: 0.32, shadowRadius: 22, shadowOffset: { width: 0, height: 12 } },

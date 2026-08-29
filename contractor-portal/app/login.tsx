@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import { AppText as Text, AppTextInput as TextInput } from '@/components/app-typography';
 import { ThemedAlert as Alert } from '@/components/themed-alert';
+import { SmsConsentControl } from '@/components/sms-consent-control';
 
 const BRAND_BLUE = '#1D4ED8';
 const PAPER = '#FFFFFF';
@@ -22,6 +23,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [smsConsent, setSmsConsent] = useState(false);
 
   const signIn = async () => {
     Keyboard.dismiss();
@@ -79,6 +81,11 @@ export default function LoginScreen() {
       return;
     }
 
+    if (smsConsent) {
+      const { error: consentError } = await supabase.rpc('set_my_sms_consent', { p_consent: true });
+      if (consentError) console.warn('SMS consent could not be saved:', consentError.message);
+    }
+
     router.replace(contractor?.must_change_password ? '/set-password' : '/(tabs)');
   };
 
@@ -87,7 +94,7 @@ export default function LoginScreen() {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.hero}>
           <View style={styles.themeToggle}><ThemeToggle /></View>
-          <Image source={require('@/assets/images/JobOps_logo_v2.png')} style={styles.logo} resizeMode="contain" />
+          <Image source={require('@/assets/images/JobOps_alt.png')} style={styles.logo} resizeMode="contain" />
           <View style={styles.heroCopy}>
             <Text style={styles.heroKicker}>MANAGE · ASSIGN · COMPLETE</Text>
             <Text style={styles.heroTitle}>Field Operations, Organized</Text>
@@ -148,7 +155,9 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           <Text style={styles.demoText}>Only active contractors linked to a Supabase Auth account can continue.</Text>
+          <SmsConsentControl checked={smsConsent} onChange={setSmsConsent} />
           <Text style={styles.footerText}>Need access? Contact your JobOps administrator to be added as an approved contractor.</Text>
+          <View style={styles.legalLinks}><Link href="/privacy" style={styles.legalLink}>Privacy Policy</Link><Text style={styles.legalSeparator}>•</Text><Link href="/terms" style={styles.legalLink}>Terms of Service</Link></View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -179,5 +188,8 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   primaryButton: { minHeight: 52, backgroundColor: '#243B5C', marginTop: 24, paddingHorizontal: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, borderRadius: 6 },
   primaryButtonText: { color: PAPER, fontSize: 13, fontWeight: '900' },
   demoText: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 14 },
-  footerText: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 'auto', paddingBottom: 20 },
+  footerText: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 24 },
+  legalLinks: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 14, paddingBottom: 20 },
+  legalLink: { color: colors.primary, fontSize: 11, fontWeight: '900', textDecorationLine: 'underline' },
+  legalSeparator: { color: colors.textMuted, fontSize: 11 },
 });

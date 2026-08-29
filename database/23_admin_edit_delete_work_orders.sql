@@ -53,7 +53,7 @@ begin
   where id = v_property_id;
 
   update public.work_orders
-  set title = 'Work order for ' || trim(p_customer_name),
+  set title = 'Work Order Request from: ' || trim(p_customer_name),
       description = trim(p_description),
       priority = p_priority,
       deadline_at = p_deadline_at

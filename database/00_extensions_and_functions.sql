@@ -1,4 +1,4 @@
--- Marty Wright Contractor Portal
+-- JobOps Contractor Portal
 -- Shared PostgreSQL extensions and timestamp helper.
 
 create extension if not exists pgcrypto;

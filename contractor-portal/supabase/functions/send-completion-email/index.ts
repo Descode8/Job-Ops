@@ -14,7 +14,9 @@ Deno.serve(async (request) => {
     const { data: { user } } = await caller.auth.getUser();
     if (!user) return json({ error: 'Authentication required' }, 401);
 
-    const workOrderId = String((await request.json()).workOrderId ?? '');
+    const requestBody = await request.json();
+    const workOrderId = String(requestBody.workOrderId ?? '');
+    const isUpdate = requestBody.isUpdate === true;
     if (!workOrderId) return json({ error: 'Work order ID is required' }, 400);
     const { data: contractor } = await admin.from('contractors').select('id, full_name, is_admin').eq('auth_user_id', user.id).eq('is_active', true).single();
     if (!contractor) return json({ error: 'Active contractor access required' }, 403);
@@ -25,10 +27,10 @@ Deno.serve(async (request) => {
     if (!contractor.is_admin && !assignment) return json({ error: 'You are not assigned to this work order' }, 403);
     if (order.status !== 'completed') return json({ error: 'The work order is not complete' }, 409);
 
-    const { data: existing } = await admin.from('email_deliveries').select('id').eq('work_order_id', workOrderId).eq('email_type', 'completion_notice').eq('status', 'sent').maybeSingle();
-    if (existing) return json({ message: 'Completion email already sent' });
+    const { data: existing } = await admin.from('email_deliveries').select('id').eq('work_order_id', workOrderId).eq('email_type', 'completion_notice').eq('status', 'sent').limit(1).maybeSingle();
+    if (existing && !isUpdate) return json({ message: 'Completion email already sent' });
 
-    const subject = 'JobOps Service Completion';
+    const subject = isUpdate ? 'Updated JobOps Service Completion' : 'JobOps Service Completion';
     const { data: delivery, error: deliveryError } = await admin.from('email_deliveries').insert({ work_order_id: workOrderId, requested_by: contractor.id, recipient_email: RECIPIENT_EMAIL, subject, email_type: 'completion_notice', status: 'queued' }).select('id').single();
     if (deliveryError) throw deliveryError;
 
@@ -74,6 +76,10 @@ Deno.serve(async (request) => {
     const overflowNotice = linkedOnlyCount
       ? `<div style="margin:18px 0;padding:14px 16px;border-left:4px solid #1d4ed8;background:#e8f1fa"><strong>${linkedOnlyCount} media file${linkedOnlyCount === 1 ? '' : 's'} available by secure download</strong><br><span style="color:#405c78">To keep this email within delivery limits, larger files are linked below instead of attached. Links remain active for 7 days.</span></div>`
       : '';
+    const imageFiles = signedFiles.filter((file) => file.url && String(file.mime_type ?? '').toLowerCase().startsWith('image/'));
+    const imageGalleryHtml = imageFiles.length
+      ? `<h3>Pictures</h3>${imageFiles.map((file) => `<div style="margin:0 0 18px"><a href="${escapeHtml(file.url)}"><img src="${escapeHtml(file.url)}" alt="${escapeHtml(file.original_file_name || 'Completed work picture')}" width="560" style="display:block;width:100%;max-width:560px;height:auto;border:0;border-radius:8px"></a><div style="margin-top:6px;font-size:12px;color:#405c78">${escapeHtml(file.original_file_name || 'Completed work picture')}</div></div>`).join('')}`
+      : '';
     const filesHtml = signedFiles.length
       ? `${overflowNotice}<h3>Photos, videos, and invoice files</h3><ul style="padding-left:20px">${signedFiles.map((file) => `<li style="margin-bottom:8px">${file.url ? `<a href="${escapeHtml(file.url)}" style="color:#1d4ed8;font-weight:700">${escapeHtml(file.original_file_name)}</a>` : escapeHtml(file.original_file_name)} — ${escapeHtml(fileLabel(file))}${attachedPaths.has(file.storage_path) ? ' (attached)' : file.url ? ' (secure download · expires in 7 days)' : ' (link unavailable)'}</li>`).join('')}</ul>`
       : '<h3>Attachments</h3><p>No photos, videos, or invoice files were submitted.</p>';
@@ -81,7 +87,7 @@ Deno.serve(async (request) => {
         from: jobOpsSender(),
         to: [RECIPIENT_EMAIL],
         subject,
-        html: jobOpsEmail(`<h1 style="margin:0 0 18px;font-size:24px">Work order complete</h1><p><strong>${escapeHtml(order.work_order_number)}</strong> has been marked complete.</p><p><strong>Customer:</strong> ${escapeHtml(customer)}<br><strong>Address:</strong> ${escapeHtml(address)}<br><strong>Priority:</strong> ${escapeHtml(order.priority)}<br><strong>Completed by:</strong> ${escapeHtml(contractor.full_name)}<br><strong>Completed:</strong> ${escapeHtml(completedAt)}</p><p><strong>Work description:</strong><br>${escapeHtml(order.description).replace(/\n/g, '<br>')}</p>${notesHtml}${invoiceHtml}${filesHtml}`, `${order.work_order_number} has been completed in JobOps.`),
+        html: jobOpsEmail(`<h1 style="margin:0 0 18px;font-size:24px">${isUpdate ? 'Updated work order completion' : 'Work order complete'}</h1><p><strong>${escapeHtml(order.work_order_number)}</strong> ${isUpdate ? 'has updated completion information.' : 'has been marked complete.'}</p><p><strong>Customer:</strong> ${escapeHtml(customer)}<br><strong>Address:</strong> ${escapeHtml(address)}<br><strong>Priority:</strong> ${escapeHtml(order.priority)}<br><strong>Completed by:</strong> ${escapeHtml(contractor.full_name)}<br><strong>Completed:</strong> ${escapeHtml(completedAt)}</p><p><strong>Work description:</strong><br>${escapeHtml(order.description).replace(/\n/g, '<br>')}</p>${notesHtml}${invoiceHtml}${imageGalleryHtml}${filesHtml}`, `${order.work_order_number} ${isUpdate ? 'has updated completion information' : 'has been completed'} in JobOps.`),
         attachments,
     };
     let resendResponse = await sendEmail(emailPayload);

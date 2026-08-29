@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
@@ -17,7 +18,9 @@ type ResponseNotice = {
 
 export function AdminResponseNotificationHost() {
   const { colors } = useAppTheme();
+  const segments = useSegments();
   const [notices, setNotices] = useState<ResponseNotice[]>([]);
+  const canShowNotification = segments[0] === '(tabs)' || segments[0] === 'work-order';
   const notice = notices[0] ?? null;
   const lastNotice = useRef<ResponseNotice | null>(null);
   if (notice) lastNotice.current = notice;
@@ -85,7 +88,7 @@ export function AdminResponseNotificationHost() {
   };
 
   const accent = displayedNotice?.accepted ? '#35A767' : '#DC2626';
-  return <Modal visible={Boolean(notice)} transparent animationType="fade" statusBarTranslucent onRequestClose={() => undefined}>
+  return <Modal visible={Boolean(notice) && canShowNotification} transparent animationType="fade" statusBarTranslucent onRequestClose={() => undefined}>
     <View style={styles.backdrop}>
       <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
         <View style={[styles.icon, { backgroundColor: accent }]}><Ionicons name={displayedNotice?.accepted ? 'checkmark' : 'close'} size={30} color="#FFFFFF" /></View>

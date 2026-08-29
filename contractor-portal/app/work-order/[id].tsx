@@ -6,7 +6,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
 
 import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { AppText as Text, AppTextInput as TextInput } from '@/components/app-typography';
@@ -17,7 +16,10 @@ import { formatWorkOrderNumber } from '@/lib/work-order-number';
 import { formatWorkOrderDeadline } from '@/lib/work-order-deadline';
 import { workOrderPriorityColor } from '@/lib/work-order-priority';
 import { formatPhoneNumber, phoneNumberDigits } from '@/lib/phone-number';
+import { mapChoices, openMapDirections } from '@/lib/map-directions';
 import { useUploads } from '@/contexts/upload-context';
+import { MediaCarouselModal } from '@/components/media-carousel-modal';
+import { notifyWorkOrderSms } from '@/lib/work-order-sms';
 
 const YELLOW = '#1D4ED8'; const NAVY = '#09192D'; const BLUE = '#1D4ED8'; const PAPER = '#FFFFFF'; const FHA_ORANGE = '#FFB020';
 
@@ -122,13 +124,24 @@ export default function WorkOrderDetailScreen() {
   const workOrderUploadId = `work-order-${id}`;
   const isUploadingAttachments = isUploading(workOrderUploadId);
   const hasWorkOrderNote = notes.length > 0;
-  const hasCompleteHomeChecklist = checklistItems.length === 14 && checklistItems.every((item) => completedChecklist.includes(item.id));
+  const hasCompleteHomeChecklist = checklistItems.length > 0 && checklistItems.every((item) => completedChecklist.includes(item.id));
   const canFinalize = !isCompleted && (isHomeProgress ? hasCompleteHomeChecklist : hasWorkOrderNote && photoCount >= 2);
 
-  const openDirections = async () => {
+  const openDirections = () => {
     if (!address) return;
-    await markWorkOrderStarted('navigation_started');
-    await Linking.openURL(`https://maps.apple.com/?daddr=${encodeURIComponent(address)}&dirflg=d`);
+    const choices = mapChoices(address);
+    Alert.alert('Select Navigation', 'Select the app you want to use for directions.', [
+      ...choices.map((choice) => ({ text: choice.label, icon: choice.icon, onPress: () => void startDirections(choice.url) })),
+    ], { cancelable: true, showCloseButton: true });
+  };
+
+  const startDirections = async (url: string) => {
+    try {
+      await markWorkOrderStarted('navigation_started');
+      await openMapDirections(url);
+    } catch (error) {
+      Alert.alert('Could not open maps', error instanceof Error ? error.message : 'No maps application is available on this device.');
+    }
   };
 
   const markWorkOrderStarted = async (startAction: 'customer_called' | 'navigation_started') => {
@@ -196,6 +209,7 @@ export default function WorkOrderDetailScreen() {
     if (editingCompletedWorkOrder) setHasCompletedChanges(true);
     setNote('');
     Keyboard.dismiss();
+    notifyWorkOrderSms(order.id, 'work_order_modified', 'Job note added.');
     await refreshStatus();
   };
 
@@ -296,6 +310,10 @@ export default function WorkOrderDetailScreen() {
         setInvoicePrice(Number(savedPrice).toFixed(2));
       }
     }
+    if (savedFiles.length) {
+      const label = kind === 'photo' ? 'photo' : kind === 'video' ? 'video' : 'invoice attachment';
+      notifyWorkOrderSms(order.id, 'work_order_modified', `${savedFiles.length} ${label}${savedFiles.length === 1 ? '' : 's'} uploaded.`);
+    }
     await refreshStatus();
     Alert.alert(kind === 'photo' ? 'Photos uploaded' : kind === 'video' ? 'Videos uploaded' : 'Invoice uploaded', kind === 'photo' || kind === 'video' ? `${savedFiles.length} ${kind}${savedFiles.length === 1 ? '' : 's'} attached to work order ${order.work_order_number}.` : `${assets[0].name} was attached to work order ${order.work_order_number}.`);
     });
@@ -334,6 +352,10 @@ export default function WorkOrderDetailScreen() {
     if (recordError) { Alert.alert('Could not remove attachment record', recordError.message); return; }
     setFiles((current) => current.filter((file) => !ids.includes(file.id)));
     if (editingCompletedWorkOrder) setHasCompletedChanges(true);
+    if (order) {
+      const label = removingOnlyPhotos ? 'photo' : removingOnlyVideos ? 'video' : 'attachment';
+      notifyWorkOrderSms(order.id, 'work_order_modified', `${photos.length} ${label}${photos.length === 1 ? '' : 's'} deleted.`);
+    }
     await loadCurrentStatus();
     Alert.alert(
       photos.length === 1 ? `${removingOnlyPhotos ? 'Photo' : removingOnlyVideos ? 'Video' : 'Attachment'} removed` : 'Photos removed',
@@ -362,6 +384,7 @@ export default function WorkOrderDetailScreen() {
     if (editingCompletedWorkOrder) setHasCompletedChanges(true);
     setInvoicePriceEdits((current) => ({ ...current, [file.id]: parsedPrice.toFixed(2) }));
     Keyboard.dismiss();
+    if (order) notifyWorkOrderSms(order.id, 'work_order_modified', `Invoice price set to ${formatCurrency(parsedPrice)}.`);
     Alert.alert('Invoice price saved', `The invoice price is now ${formatCurrency(parsedPrice)}.`);
   };
 
@@ -374,6 +397,7 @@ export default function WorkOrderDetailScreen() {
     setOrder((current) => current ? { ...current, invoice_amount: Number(data) } : current);
     setInvoicePrice(Number(data).toFixed(2));
     Keyboard.dismiss();
+    notifyWorkOrderSms(order.id, 'work_order_modified', `Invoice price set to ${formatCurrency(Number(data))}.`);
     return true;
   };
 
@@ -384,6 +408,7 @@ export default function WorkOrderDetailScreen() {
     if (error) { Alert.alert('Could not remove job note', error.message); return; }
     setNotes((current) => current.filter((noteItem) => noteItem.id !== item.id));
     if (editingCompletedWorkOrder) setHasCompletedChanges(true);
+    if (order) notifyWorkOrderSms(order.id, 'work_order_modified', 'Job note deleted.');
     await loadCurrentStatus();
     Alert.alert('Job note removed', 'The job note was removed.');
   };
@@ -394,6 +419,7 @@ export default function WorkOrderDetailScreen() {
     const { data, error } = await supabase.rpc(isHomeProgress ? 'complete_home_progress' : 'finalize_work_order', { p_work_order_id: order.id });
     if (error) { setIsSaving(false); Alert.alert('Could not finalize work order', error.message); return; }
     const { error: emailError } = await supabase.functions.invoke('send-completion-email', { body: { workOrderId: order.id } });
+    notifyWorkOrderSms(order.id, 'work_order_completed');
     setIsSaving(false);
     setOrder((current) => current ? { ...current, status: data ?? 'completed' } : current);
     Alert.alert(emailError ? 'Work order completed; email failed' : 'Work order finalized', emailError ? `${formatWorkOrderNumber(order.work_order_number)} was completed, but the completion email could not be delivered. It can be retried by completing the email function request again.` : `${formatWorkOrderNumber(order.work_order_number)} is now available in the Complete WO tab and a completion email was sent.`);
@@ -419,10 +445,16 @@ export default function WorkOrderDetailScreen() {
       const changed = changedInvoices.find((item) => item.file.id === file.id);
       return changed ? { ...file, invoice_amount: changed.amount } : file;
     }));
+    if (order && changedInvoices.length) notifyWorkOrderSms(order.id, 'work_order_modified', `${changedInvoices.length} invoice price${changedInvoices.length === 1 ? '' : 's'} changed.`);
     await loadCurrentStatus();
+    const { error: emailError } = await supabase.functions.invoke('send-completion-email', { body: { workOrderId: order?.id, isUpdate: true } });
     setIsSaving(false);
+    if (emailError) {
+      Alert.alert('Changes saved; email failed', 'The completed work order changes were saved, but the updated completion email could not be delivered.');
+      return;
+    }
     setHasCompletedChanges(false);
-    Alert.alert('Changes saved', 'The completed work order changes have been saved.');
+    Alert.alert('Changes saved', 'The completed work order changes were saved and an updated completion email was sent.');
   };
 
   const resetEditFields = () => {
@@ -496,6 +528,7 @@ export default function WorkOrderDetailScreen() {
         }
       }
       setFiles((current) => [...savedFiles, ...current]);
+      if (savedFiles.length) notifyWorkOrderSms(order.id, 'work_order_modified', `${savedFiles.length} reference ${isVideo ? 'video' : 'photo'}${savedFiles.length === 1 ? '' : 's'} uploaded.`);
       Alert.alert(`${isVideo ? 'Videos' : 'Photos'} uploaded`, `${savedFiles.length} admin reference ${isVideo ? 'video' : 'photo'}${savedFiles.length === 1 ? '' : 's'} added.`);
     });
   };
@@ -518,11 +551,14 @@ export default function WorkOrderDetailScreen() {
       p_priority: editPriority,
       p_deadline_at: editHasDeadline ? editDeadline.toISOString() : null,
     });
+    if (error) { setIsSaving(false); Alert.alert('Could not update work order', error.message); return; }
+    const { error: emailError } = isCompleted
+      ? await supabase.functions.invoke('send-completion-email', { body: { workOrderId: order.id, isUpdate: true } })
+      : { error: null };
     setIsSaving(false);
-    if (error) { Alert.alert('Could not update work order', error.message); return; }
     setOrder((current) => current ? {
       ...current,
-      title: `Work order for ${editCustomerName.trim()}`,
+      title: `Work Order Request from: ${editCustomerName.trim()}`,
       description: editDescription.trim(),
       priority: editPriority,
       deadline_at: editHasDeadline ? editDeadline.toISOString() : null,
@@ -533,7 +569,13 @@ export default function WorkOrderDetailScreen() {
       } : null,
     } : current);
     setIsEditOpen(false);
-    Alert.alert('Work order updated', `${formatWorkOrderNumber(order.work_order_number)} has been updated.`);
+    notifyWorkOrderSms(order.id, 'work_order_modified', 'Work-order details edited.');
+    Alert.alert(
+      emailError ? 'Work order updated; email failed' : 'Work order updated',
+      emailError
+        ? `${formatWorkOrderNumber(order.work_order_number)} was updated, but the updated completion email could not be delivered.`
+        : `${formatWorkOrderNumber(order.work_order_number)} has been updated${isCompleted ? ' and an updated completion email was sent' : ''}.`,
+    );
   };
 
   const deleteWorkOrder = () => {
@@ -543,7 +585,7 @@ export default function WorkOrderDetailScreen() {
       `${formatWorkOrderNumber(order.work_order_number)} and all of its assignments, notes, checklist entries, photos, invoices, and notifications will be deleted. This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete permanently', style: 'destructive', onPress: async () => {
+        { text: 'Delete Permanently', style: 'destructive', onPress: async () => {
           setIsSaving(true);
           const storagePaths = files.map((file) => file.storage_path);
           if (storagePaths.length) {
@@ -647,35 +689,19 @@ export default function WorkOrderDetailScreen() {
         <View style={[styles.card, styles.roundedButton]}>
           <Text style={styles.sectionLabel}>COMPLETION REQUIREMENTS</Text>
           {isHomeProgress
-            ? <Requirement met={hasCompleteHomeChecklist} text="All 14 Home Progress steps" />
+            ? <Requirement met={hasCompleteHomeChecklist} text={`All ${checklistItems.length} Home Progress steps`} />
             : <><Requirement met={hasWorkOrderNote} text="At least one work order note" /><Requirement met={photoCount >= 2} text={`At least two work order photos (${photoCount}/2)`} /><Text style={styles.optionalText}>PDF invoice (optional)</Text></>}
           {isCompleted
             ? <View style={styles.completedBanner}><Ionicons name="checkmark-done" size={20} color="#2E8B57" /><Text style={styles.completedText}>WORK ORDER FINALIZED</Text></View>
             : canFinalize
               ? <Pressable style={({ pressed }) => [styles.finalizeButton, styles.roundedButton, pressed && styles.finalizePressed]} onPress={() => void finalizeWorkOrder()} disabled={isSaving}><Text style={styles.finalizeText}>{isSaving ? 'Completing...' : isHomeProgress ? 'Complete WO' : 'Finalize WO'}</Text></Pressable>
-              : <Text style={styles.readyHint}>{isHomeProgress ? 'Complete WO will appear when all 14 steps are checked.' : 'Finalize WO will appear when all required items are complete.'}</Text>}
+              : <Text style={styles.readyHint}>{isHomeProgress ? `Complete WO will appear when all ${checklistItems.length} steps are checked.` : 'Finalize WO will appear when all required items are complete.'}</Text>}
           {editingCompletedWorkOrder && hasCompletedChanges && <Pressable style={({ pressed }) => [styles.saveChangesButton, styles.roundedButton, pressed && styles.saveButtonPressed]} onPress={() => void saveCompletedChanges()} disabled={isSaving}><Ionicons name="save" size={18} color={PAPER} /><Text style={styles.saveText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text></Pressable>}
         </View>
       </>}
     </ScrollView>
     </KeyboardAvoidingView>
-    <Modal visible={Boolean(previewFile)} transparent animationType="fade" onRequestClose={() => setPreviewFile(null)} statusBarTranslucent>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.previewModal}>
-          <View style={styles.previewHeader}>
-            <View style={styles.previewTitleCopy}><Text style={styles.previewTitle} numberOfLines={1}>{previewFile?.original_file_name}</Text><Text style={styles.previewType}>{previewFile?.file_type === 'invoice' ? 'INVOICE ATTACHMENT' : previewFile?.mime_type.toLowerCase().startsWith('video/') ? 'WORK ORDER VIDEO' : 'JOB PHOTO'}</Text></View>
-            <TouchableOpacity style={styles.closeButton} onPress={() => setPreviewFile(null)} accessibilityRole="button" accessibilityLabel="Close attachment preview"><Ionicons name="close" size={24} color={PAPER} /></TouchableOpacity>
-          </View>
-          <View style={styles.previewBody}>
-            {previewFile?.url && PHOTO_MIME_TYPES.has(previewFile.mime_type.toLowerCase())
-              ? <Image source={{ uri: previewFile.url }} style={styles.previewImage} contentFit="contain" />
-              : previewFile?.url
-                ? <WebView source={{ uri: previewFile.url }} style={styles.pdfViewer} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction startInLoadingState renderLoading={() => <View style={styles.viewerLoading}><Text style={styles.viewerLoadingText}>Loading attachment...</Text></View>} />
-                : null}
-          </View>
-        </View>
-      </View>
-    </Modal>
+    <MediaCarouselModal items={files} activeId={previewFile?.id ?? null} onClose={() => setPreviewFile(null)} />
     <Modal visible={isEditOpen} animationType="slide" onRequestClose={cancelEditWorkOrder}>
       <SafeAreaProvider>
         <SafeAreaView style={styles.editSafeArea} edges={['top', 'bottom']}>
