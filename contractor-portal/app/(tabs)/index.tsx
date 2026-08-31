@@ -358,7 +358,7 @@ export default function HomeScreen() {
             <Ionicons name="menu" size={26} color={PAPER} />
           </TouchableOpacity>
           <View style={styles.brand}>
-            <Image source={require('@/assets/images/JobOps_alt.png')} style={styles.logo} contentFit="contain" />
+            <Image source={require('@/assets/images/JobOps.png')} style={styles.logo} contentFit="contain" />
             <Text style={styles.brandTitle}>JobOps</Text>
           </View>
           <View style={styles.headerActions}>

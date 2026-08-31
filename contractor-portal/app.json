@@ -4,38 +4,42 @@
     "slug": "jobops",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/JobOps_alt.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "jobops",
     "backgroundColor": "#F3F7FC",
     "primaryColor": "#1D4ED8",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.jobops.contractor",
+      "buildNumber": "1",
       "supportsTablet": true
     },
     "android": {
+      "package": "com.jobops.contractor",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#050B14",
-        "foregroundImage": "./assets/images/JobOps_alt.png"
+        "foregroundImage": "./assets/images/app-icon-android-foreground.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/JobOps_alt.png"
+      "favicon": "./assets/images/JobOps.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/JobOps_alt.png",
+          "image": "./assets/images/JobOps.png",
           "imageWidth": 180,
           "resizeMode": "contain",
           "backgroundColor": "#F3F7FC",
           "dark": {
-            "image": "./assets/images/JobOps_alt.png",
+            "image": "./assets/images/JobOps.png",
             "backgroundColor": "#050B14"
           }
         }
@@ -51,7 +55,8 @@
           ]
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

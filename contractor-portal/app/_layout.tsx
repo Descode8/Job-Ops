@@ -27,7 +27,7 @@ export default function RootLayout() {
   });
 
   if (!fontsLoaded && !fontError) {
-    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#050B14' }}><Image source={require('@/assets/images/JobOps_alt.png')} style={{ width: 180, height: 180 }} contentFit="contain" /></View>;
+    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#050B14' }}><Image source={require('@/assets/images/JobOps.png')} style={{ width: 180, height: 180 }} contentFit="contain" /></View>;
   }
   return <AppThemeProvider><UploadProvider><ThemedRootLayout /></UploadProvider></AppThemeProvider>;
 }

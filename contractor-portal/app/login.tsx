@@ -36,7 +36,7 @@ export default function LoginScreen() {
     finally { submitting.current = false; setIsLoading(false); }
   };
   return <SafeAreaView style={styles.safe}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-    <View style={styles.hero}><View style={styles.themeToggle}><ThemeToggle /></View><Image source={require('@/assets/images/JobOps_alt.png')} style={styles.logo} resizeMode="contain" /><View><Text style={styles.kicker}>MANAGE · ASSIGN · COMPLETE</Text><Text style={styles.heroTitle}>Field Operations, Organized</Text></View></View>
+    <View style={styles.hero}><View style={styles.themeToggle}><ThemeToggle /></View><Image source={require('@/assets/images/JobOps.png')} style={styles.logo} resizeMode="contain" /><View><Text style={styles.kicker}>MANAGE · ASSIGN · COMPLETE</Text><Text style={styles.heroTitle}>Field Operations, Organized</Text></View></View>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets>
       <View style={styles.access}><Ionicons name="shield-checkmark" size={19} color={colors.primary} /><Text style={styles.accessText}>CONTRACTORS ONLY</Text></View><Text style={styles.title}>Log In</Text><Text style={styles.subtitle}>Use your email address or phone number and password.</Text>
       <Label text="Email/Phone Number" /><TextInput style={styles.input} value={identifier} onChangeText={setIdentifier} placeholder="Enter your email or phone number" placeholderTextColor="#8A98A8" autoCapitalize="none" autoCorrect={false} textContentType="username" editable={!isLoading} />
