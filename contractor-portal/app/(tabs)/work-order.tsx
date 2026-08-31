@@ -201,7 +201,7 @@ export default function WorkOrderScreen() {
       try { await uploadAttachments(workOrderId); }
       catch (error) { attachmentError = error instanceof Error ? error.message : 'An attachment could not be uploaded.'; }
     }
-    if (workOrderId) notifyWorkOrderSms(workOrderId, 'work_order_created', undefined, assigneeId);
+    if (workOrderId) notifyWorkOrderSms(workOrderId, 'assigned');
     const { error: emailError } = workOrderId
       ? await supabase.functions.invoke('send-work-order', { body: { workOrderId, recipientEmail: WORK_ORDER_RECIPIENT } })
       : { error: new Error('The database did not return a work-order ID.') };
@@ -286,7 +286,7 @@ export default function WorkOrderScreen() {
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Assign to Admin or Contractor</Text>
+          <Text style={styles.label}>Assign to Contractor</Text>
           <TouchableOpacity
             style={styles.dropdownButton}
             onPress={() => setIsContractorListOpen((open) => !open)}

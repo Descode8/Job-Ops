@@ -4,7 +4,7 @@ import { Linking, Platform } from 'react-native';
 export type MapChoice = { label: string; url: string; icon: number };
 
 const APPLE_MAPS_ICON = require('@/assets/images/apple_maps.webp');
-const GOOGLE_MAPS_ICON = require('@/assets/images/google_maps.svg');
+const GOOGLE_MAPS_ICON = require('@/assets/images/google-maps.png');
 let googleMapsIconRef: ImageRef | null = null;
 
 export async function preloadMapIcons() {

@@ -11,6 +11,7 @@ import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { AppText as Text, AppTextInput as TextInput } from '@/components/app-typography';
 import { ThemedAlert as Alert } from '@/components/themed-alert';
 import { supabase } from '@/lib/supabase';
+import { notifyWorkOrderSms } from '@/lib/work-order-sms';
 import { formatWorkOrderNumber } from '@/lib/work-order-number';
 import { formatWorkOrderDeadline } from '@/lib/work-order-deadline';
 import { compareWorkOrderPriority, workOrderPriorityColor } from '@/lib/work-order-priority';
@@ -19,7 +20,6 @@ import { formatPhoneNumber, phoneNumberDigits } from '@/lib/phone-number';
 import { mapChoices, openMapDirections } from '@/lib/map-directions';
 import { MediaCarouselModal } from '@/components/media-carousel-modal';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
-import { notifyWorkOrderSms } from '@/lib/work-order-sms';
 
 const YELLOW = '#1D4ED8';
 const NAVY = '#09192D';
@@ -238,10 +238,10 @@ export default function HomeScreen() {
   const respondToOffer = async (offerId: string, response: 'accepted' | 'rejected') => {
     setRespondingOfferId(offerId);
     try {
-      const respondedOffer = pendingOffers.find((offer) => offer.offer_id === offerId) ?? (viewingOffer?.offer_id === offerId ? viewingOffer : null);
+      const respondingOffer = pendingOffers.find((offer) => offer.offer_id === offerId);
       const { error } = await withTimeout(supabase.rpc('respond_to_work_order_offer', { p_offer_id: offerId, p_response: response }), 15_000);
       if (error) throw error;
-      if (respondedOffer) notifyWorkOrderSms(respondedOffer.work_order_id, response === 'accepted' ? 'offer_accepted' : 'offer_rejected');
+      if (respondingOffer?.work_order_id) notifyWorkOrderSms(respondingOffer.work_order_id, response);
       setViewingOffer((current) => current?.offer_id === offerId ? null : current);
       setSuspendedOffer(null);
       setActiveOfferMediaId(null);

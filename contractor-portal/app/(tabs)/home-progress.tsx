@@ -8,10 +8,10 @@ import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { AppText as Text, AppTextInput as TextInput } from '@/components/app-typography';
 import { ThemedAlert as Alert } from '@/components/themed-alert';
 import { supabase } from '@/lib/supabase';
+import { notifyWorkOrderSms } from '@/lib/work-order-sms';
 import { useWorkOrderRealtime } from '@/hooks/use-work-order-realtime';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
 import { formatPhoneNumber, phoneNumberDigits } from '@/lib/phone-number';
-import { notifyWorkOrderSms } from '@/lib/work-order-sms';
 
 type ChecklistItem = { id: number; label: string };
 type HomeFinancingType = 'NFHA' | 'FHA';
@@ -119,8 +119,8 @@ export default function HomeProgressScreen() {
     setCompletingHomeId(home.id);
     const { error } = await supabase.rpc('complete_home_progress', { p_work_order_id: home.id });
     if (error) { setCompletingHomeId(null); Alert.alert('Could not complete work order', error.message); return; }
+    notifyWorkOrderSms(home.id, 'completed');
     const { error: emailError } = await supabase.functions.invoke('send-completion-email', { body: { workOrderId: home.id } });
-    notifyWorkOrderSms(home.id, 'work_order_completed');
     setCompletingHomeId(null);
     setHomes((existing) => existing.filter((entry) => entry.id !== home.id));
     Alert.alert(emailError ? 'Work order completed; email failed' : 'Work order completed', emailError ? `${home.properties?.customer_name || home.title} was completed, but the completion email could not be delivered.` : `${home.properties?.customer_name || home.title} was moved to completed work and a completion email was sent.`);

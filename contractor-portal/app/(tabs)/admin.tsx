@@ -16,7 +16,6 @@ import { formatWorkOrderDeadline } from '@/lib/work-order-deadline';
 import { compareWorkOrderPriority, workOrderPriorityColor as getWorkOrderPriorityColor } from '@/lib/work-order-priority';
 import { useWorkOrderRealtime } from '@/hooks/use-work-order-realtime';
 import { formatPhoneNumber, phoneNumberDigits } from '@/lib/phone-number';
-import { SmsConsentControl } from '@/components/sms-consent-control';
 
 const BLUE = '#1D4ED8'; const PAPER = '#FFFFFF'; const YELLOW = '#1D4ED8';
 type Row = { contractor_id: string; full_name: string; email: string | null; phone_number: string; is_active: boolean; is_admin: boolean; work_order_id: string | null; work_order_number: string | null; work_order_title: string | null; work_order_status: string | null };
@@ -47,7 +46,6 @@ export default function AdminScreen() {
   const [homeServicesExpanded, setHomeServicesExpanded] = useState(false);
   const [workOrdersExpanded, setWorkOrdersExpanded] = useState(false);
   const [fullName, setFullName] = useState(''); const [email, setEmail] = useState(''); const [phone, setPhone] = useState(''); const [saving, setSaving] = useState(false);
-  const [smsConsent, setSmsConsent] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState<CreatedCredentials | null>(null);
   const [selectedContractor, setSelectedContractor] = useState<ContractorView | null>(null);
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<AdminWorkOrder | null>(null);
@@ -86,11 +84,11 @@ export default function AdminScreen() {
   const createContractor = async () => {
     if (!fullName.trim() || !email.trim() || !phone.trim()) { Alert.alert('Missing information', 'Name, email, and phone are required.'); return; }
     setSaving(true);
-    const { data, error } = await supabase.functions.invoke('manage-contractors', { body: { action: 'create', fullName, email, phoneNumber: phone, smsConsent } });
+    const { data, error } = await supabase.functions.invoke('manage-contractors', { body: { action: 'create', fullName, email, phoneNumber: phone } });
     setSaving(false);
     if (error || data?.error) { Alert.alert('Could not create contractor', await functionErrorMessage(error, data)); return; }
     setCreatedCredentials({ username: data.username, phoneUsername: data.phoneUsername, temporaryPassword: data.temporaryPassword });
-    setFullName(''); setEmail(''); setPhone(''); setSmsConsent(false);
+    setFullName(''); setEmail(''); setPhone('');
     Alert.alert(
       data.smsSent ? 'Contractor created and invited' : 'Contractor created; text not sent',
       data.smsSent
@@ -147,7 +145,6 @@ export default function AdminScreen() {
 
   if (authorized === false) return <SafeAreaView style={styles.safe}><View style={styles.denied}><Ionicons name="lock-closed" size={32} color={BLUE} /><Text style={styles.deniedTitle}>Admin access required</Text></View></SafeAreaView>;
   return <SafeAreaView style={styles.safe} edges={['top']}><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"><View style={styles.header}><View><Text style={styles.kicker}>JOBOPS · ADMIN</Text><Text style={[styles.title, { fontWeight: '900' }]}>Contractor Management</Text></View><Ionicons name="shield-checkmark" size={28} color={themeMode === 'black' ? PAPER : YELLOW} /></View>
-    <SmsConsentControl checked={smsConsent} onChange={setSmsConsent} contextLabel="Check only after the contractor has reviewed this disclosure and expressly agreed to receive JobOps texts. Consent is optional; when unchecked, provide login details another way." />
     <View style={styles.form}><Text style={styles.section}>CREATE CONTRACTOR</Text><TextInput style={styles.input} value={fullName} onChangeText={setFullName} placeholder="Full name" placeholderTextColor="#8A98A8" /><TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email address" placeholderTextColor="#8A98A8" keyboardType="email-address" autoCapitalize="none" /><TextInput style={styles.input} value={formatPhoneNumber(phone)} onChangeText={(value) => setPhone(phoneNumberDigits(value))} placeholder="(555) 555-5555" placeholderTextColor="#8A98A8" keyboardType="phone-pad" maxLength={14} /><Pressable style={({ pressed }) => [styles.createButton, pressed && !saving && styles.createButtonPressed, saving && styles.disabledButton]} onPress={() => void createContractor()} disabled={saving}><Text style={styles.createText}>{saving ? 'Creating Contractor...' : 'Create Contractor'}</Text></Pressable><Text style={styles.help}>JobOps will text the contractor their email username and temporary password. The credentials remain visible below as a backup.</Text>{createdCredentials && <View style={styles.credentials}><Text style={styles.credentialsTitle}>NEW CONTRACTOR LOGIN — SAVE THIS NOW</Text><Text style={styles.credentialLabel}>EMAIL USERNAME</Text><Text selectable style={styles.credentialValue}>{createdCredentials.username}</Text><Text style={styles.credentialLabel}>PHONE USERNAME</Text><Text selectable style={styles.credentialValue}>{formatPhoneNumber(createdCredentials.phoneUsername)}</Text><Text style={styles.credentialLabel}>TEMPORARY PASSWORD</Text><Text selectable style={styles.credentialValue}>{createdCredentials.temporaryPassword}</Text><Text style={styles.credentialsHelp}>The contractor will be required to replace this password after signing in.</Text><TouchableOpacity onPress={() => setCreatedCredentials(null)}><Text style={styles.dismissCredentials}>I saved these details</Text></TouchableOpacity></View>}</View>
     <Text style={styles.listSection}>CONTRACTORS & ASSIGNED WORK</Text>
     <Text style={styles.groupLabel}>ADMIN</Text>

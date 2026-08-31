@@ -63,6 +63,7 @@ For local testing, run [`seed_test_data.sql`](seed_test_data.sql) after the sche
 51. `51_work_order_storage_assignment_access.sql` - permits authorized assignees and offer recipients to view work-order storage objects.
 52. `52_pending_offer_media.sql` - exposes authorized media while a contractor reviews a pending offer.
 53. `53_sms_consent.sql` - records optional transactional SMS consent and its timestamp for each contractor.
+54. `54_secure_work_order_sms.sql` - adds SMS preferences, opt-out state, and an idempotent notification delivery log with admin-only visibility.
 
 The schema assumes Supabase PostgreSQL because `contractors.auth_user_id` references `auth.users`. The app uses the contractor's Supabase Auth email as the username and a password for sign-in; `phone_number` remains a contractor contact field. If this is run outside Supabase, replace that foreign key with the project's authentication table.
 
@@ -84,4 +85,4 @@ If the contractor app should create work orders, run `11_contractor_work_order_p
 
 Run `12_work_order_offers.sql` once to enable contractor-to-contractor offers. A recipient who accepts becomes the assignee; a recipient who rejects assigns the work order back to its sender.
 
-Run all migrations through `53_sms_consent.sql`. A standard work order can then be completed after it has at least one work-order note and two supported photos. Invoice prices and invoice image attachments are independently optional, with one invoice attachment allowed per work order. Home Progress records use their separate completion checklist with per-step comments. Assigned contractors and pending-offer recipients can open private work-order media uploaded by another authorized user, including creator attachments shown while reviewing an offer. Transactional SMS is sent only to active contractors whose consent is recorded.
+Run all migrations through `54_secure_work_order_sms.sql`. A standard work order can then be completed after it has at least one work-order note and two supported photos. Invoice prices and invoice image attachments are independently optional, with one invoice attachment allowed per work order. Home Progress records use their separate completion checklist with per-step comments. Assigned contractors and pending-offer recipients can open private work-order media uploaded by another authorized user, including creator attachments shown while reviewing an offer. Transactional SMS is sent only to active contractors whose consent is recorded and whose SMS notification preference is enabled.

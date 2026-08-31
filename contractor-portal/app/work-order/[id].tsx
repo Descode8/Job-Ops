@@ -196,6 +196,7 @@ export default function WorkOrderDetailScreen() {
     setIsSaving(false); setIsAssignmentOpen(false);
     if (error) { Alert.alert('Could not reassign work order', error.message); return; }
     setAssignment({ contractor_id: nextContractor.id, contractors: nextContractor });
+    notifyWorkOrderSms(order.id, 'assigned');
     Alert.alert('Work order reassigned', `${nextContractor.full_name} is now assigned to ${formatWorkOrderNumber(order.work_order_number)}.`);
   };
 
@@ -206,10 +207,10 @@ export default function WorkOrderDetailScreen() {
     setIsSaving(false);
     if (error) { Alert.alert('Note was not saved', error.message); return; }
     setNotes((current) => [data as Note, ...current]);
+    notifyWorkOrderSms(order.id, 'note_added');
     if (editingCompletedWorkOrder) setHasCompletedChanges(true);
     setNote('');
     Keyboard.dismiss();
-    notifyWorkOrderSms(order.id, 'work_order_modified', 'Job note added.');
     await refreshStatus();
   };
 
@@ -297,6 +298,7 @@ export default function WorkOrderDetailScreen() {
         : message;
     }
     setFiles((current) => [...savedFiles, ...current]);
+    if (savedFiles.length) notifyWorkOrderSms(order.id, kind === 'photo' ? 'photo_uploaded' : kind === 'video' ? 'video_uploaded' : 'invoice_uploaded');
     if (editingCompletedWorkOrder && savedFiles.length) setHasCompletedChanges(true);
     setInvoicePriceEdits((current) => ({ ...current, ...Object.fromEntries(savedFiles.filter((file) => file.file_type === 'invoice').map((file) => [file.id, file.invoice_amount?.toString() ?? ''])) }));
     if (uploadFailure) {
@@ -309,10 +311,6 @@ export default function WorkOrderDetailScreen() {
         setOrder((current) => current ? { ...current, invoice_amount: Number(savedPrice) } : current);
         setInvoicePrice(Number(savedPrice).toFixed(2));
       }
-    }
-    if (savedFiles.length) {
-      const label = kind === 'photo' ? 'photo' : kind === 'video' ? 'video' : 'invoice attachment';
-      notifyWorkOrderSms(order.id, 'work_order_modified', `${savedFiles.length} ${label}${savedFiles.length === 1 ? '' : 's'} uploaded.`);
     }
     await refreshStatus();
     Alert.alert(kind === 'photo' ? 'Photos uploaded' : kind === 'video' ? 'Videos uploaded' : 'Invoice uploaded', kind === 'photo' || kind === 'video' ? `${savedFiles.length} ${kind}${savedFiles.length === 1 ? '' : 's'} attached to work order ${order.work_order_number}.` : `${assets[0].name} was attached to work order ${order.work_order_number}.`);
@@ -351,11 +349,8 @@ export default function WorkOrderDetailScreen() {
     setIsSaving(false);
     if (recordError) { Alert.alert('Could not remove attachment record', recordError.message); return; }
     setFiles((current) => current.filter((file) => !ids.includes(file.id)));
+    if (order) notifyWorkOrderSms(order.id, photos.some((file) => file.file_type === 'invoice') ? 'invoice_deleted' : 'media_deleted');
     if (editingCompletedWorkOrder) setHasCompletedChanges(true);
-    if (order) {
-      const label = removingOnlyPhotos ? 'photo' : removingOnlyVideos ? 'video' : 'attachment';
-      notifyWorkOrderSms(order.id, 'work_order_modified', `${photos.length} ${label}${photos.length === 1 ? '' : 's'} deleted.`);
-    }
     await loadCurrentStatus();
     Alert.alert(
       photos.length === 1 ? `${removingOnlyPhotos ? 'Photo' : removingOnlyVideos ? 'Video' : 'Attachment'} removed` : 'Photos removed',
@@ -381,10 +376,10 @@ export default function WorkOrderDetailScreen() {
     setIsSaving(false);
     if (error) { Alert.alert('Invoice price was not saved', error.message); return; }
     setFiles((current) => current.map((item) => item.id === file.id ? { ...item, invoice_amount: parsedPrice } : item));
+    notifyWorkOrderSms(order!.id, 'invoice_price_set');
     if (editingCompletedWorkOrder) setHasCompletedChanges(true);
     setInvoicePriceEdits((current) => ({ ...current, [file.id]: parsedPrice.toFixed(2) }));
     Keyboard.dismiss();
-    if (order) notifyWorkOrderSms(order.id, 'work_order_modified', `Invoice price set to ${formatCurrency(parsedPrice)}.`);
     Alert.alert('Invoice price saved', `The invoice price is now ${formatCurrency(parsedPrice)}.`);
   };
 
@@ -395,9 +390,9 @@ export default function WorkOrderDetailScreen() {
     const { data, error } = await supabase.rpc('set_work_order_invoice_price', { p_work_order_id: order.id, p_invoice_amount: parsedPrice });
     if (error) { Alert.alert('Invoice price was not saved', error.message); return false; }
     setOrder((current) => current ? { ...current, invoice_amount: Number(data) } : current);
+    notifyWorkOrderSms(order.id, 'invoice_price_set');
     setInvoicePrice(Number(data).toFixed(2));
     Keyboard.dismiss();
-    notifyWorkOrderSms(order.id, 'work_order_modified', `Invoice price set to ${formatCurrency(Number(data))}.`);
     return true;
   };
 
@@ -407,8 +402,8 @@ export default function WorkOrderDetailScreen() {
     setIsSaving(false);
     if (error) { Alert.alert('Could not remove job note', error.message); return; }
     setNotes((current) => current.filter((noteItem) => noteItem.id !== item.id));
+    if (order) notifyWorkOrderSms(order.id, 'note_deleted');
     if (editingCompletedWorkOrder) setHasCompletedChanges(true);
-    if (order) notifyWorkOrderSms(order.id, 'work_order_modified', 'Job note deleted.');
     await loadCurrentStatus();
     Alert.alert('Job note removed', 'The job note was removed.');
   };
@@ -419,9 +414,9 @@ export default function WorkOrderDetailScreen() {
     const { data, error } = await supabase.rpc(isHomeProgress ? 'complete_home_progress' : 'finalize_work_order', { p_work_order_id: order.id });
     if (error) { setIsSaving(false); Alert.alert('Could not finalize work order', error.message); return; }
     const { error: emailError } = await supabase.functions.invoke('send-completion-email', { body: { workOrderId: order.id } });
-    notifyWorkOrderSms(order.id, 'work_order_completed');
     setIsSaving(false);
     setOrder((current) => current ? { ...current, status: data ?? 'completed' } : current);
+    notifyWorkOrderSms(order.id, 'completed');
     Alert.alert(emailError ? 'Work order completed; email failed' : 'Work order finalized', emailError ? `${formatWorkOrderNumber(order.work_order_number)} was completed, but the completion email could not be delivered. It can be retried by completing the email function request again.` : `${formatWorkOrderNumber(order.work_order_number)} is now available in the Complete WO tab and a completion email was sent.`);
   };
 
@@ -445,7 +440,6 @@ export default function WorkOrderDetailScreen() {
       const changed = changedInvoices.find((item) => item.file.id === file.id);
       return changed ? { ...file, invoice_amount: changed.amount } : file;
     }));
-    if (order && changedInvoices.length) notifyWorkOrderSms(order.id, 'work_order_modified', `${changedInvoices.length} invoice price${changedInvoices.length === 1 ? '' : 's'} changed.`);
     await loadCurrentStatus();
     const { error: emailError } = await supabase.functions.invoke('send-completion-email', { body: { workOrderId: order?.id, isUpdate: true } });
     setIsSaving(false);
@@ -528,7 +522,6 @@ export default function WorkOrderDetailScreen() {
         }
       }
       setFiles((current) => [...savedFiles, ...current]);
-      if (savedFiles.length) notifyWorkOrderSms(order.id, 'work_order_modified', `${savedFiles.length} reference ${isVideo ? 'video' : 'photo'}${savedFiles.length === 1 ? '' : 's'} uploaded.`);
       Alert.alert(`${isVideo ? 'Videos' : 'Photos'} uploaded`, `${savedFiles.length} admin reference ${isVideo ? 'video' : 'photo'}${savedFiles.length === 1 ? '' : 's'} added.`);
     });
   };
@@ -569,7 +562,6 @@ export default function WorkOrderDetailScreen() {
       } : null,
     } : current);
     setIsEditOpen(false);
-    notifyWorkOrderSms(order.id, 'work_order_modified', 'Work-order details edited.');
     Alert.alert(
       emailError ? 'Work order updated; email failed' : 'Work order updated',
       emailError
