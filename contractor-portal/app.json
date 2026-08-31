@@ -17,7 +17,6 @@
     },
     "android": {
       "package": "com.jobops.contractor",
-      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#050B14",
         "foregroundImage": "./assets/images/app-icon-android-foreground.png"
