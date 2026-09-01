@@ -13,7 +13,10 @@
     "ios": {
       "bundleIdentifier": "com.jobops.contractor",
       "buildNumber": "1",
-      "supportsTablet": true
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.jobops.contractor",
