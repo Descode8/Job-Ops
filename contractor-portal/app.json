@@ -2,7 +2,13 @@
   "expo": {
     "name": "JobOps",
     "slug": "jobops",
-    "version": "1.0.0",
+    "version": "1.0.1",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/ccb4d034-82d8-40cc-93f8-b59ed2ccffa7"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
     "scheme": "jobops",
