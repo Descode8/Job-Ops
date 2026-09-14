@@ -48,15 +48,11 @@ export const ThemedAlert = {
 export function ThemedAlertHost() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [alerts, setAlerts] = useState<AlertRequest[]>([]);
+  const [alerts, setAlerts] = useState<AlertRequest[]>(() => pendingAlerts.splice(0));
   const activeAlert = alerts[0];
 
   useEffect(() => {
     showAlert = (request) => setAlerts((current) => [...current, request]);
-    if (pendingAlerts.length) {
-      const queued = pendingAlerts.splice(0);
-      setAlerts((current) => [...current, ...queued]);
-    }
     return () => { showAlert = null; };
   }, []);
 
@@ -161,7 +157,7 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
     borderRadius: 22,
     backgroundColor: 'transparent',
   },
-  title: { color: colors.text, fontSize: 19, fontWeight: '900', lineHeight: 24, textTransform: 'capitalize' },
+  title: { color: colors.text, fontSize: 19, fontWeight: '900', lineHeight: 24 },
   message: { color: colors.textMuted, fontSize: 13, lineHeight: 20, marginTop: 8 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 22 },
   button: {

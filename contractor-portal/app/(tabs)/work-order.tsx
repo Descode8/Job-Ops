@@ -94,8 +94,10 @@ export default function WorkOrderScreen() {
     const remainingVideoSlots = MAX_VIDEO_ATTACHMENTS - videoAttachmentCount;
     const remainingSlots = remainingPhotoSlots + remainingVideoSlots;
     if (remainingSlots <= 0) { Alert.alert('Attachment limit reached', `Add no more than ${MAX_PHOTO_ATTACHMENTS} photos and ${MAX_VIDEO_ATTACHMENTS} videos.`); return; }
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { Alert.alert('Photo access required', 'Allow photo-library access to attach photos or videos.'); return; }
+    if (Platform.OS === 'ios') {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) { Alert.alert('Photo access required', 'Allow photo-library access to attach photos or videos.'); return; }
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
       quality: 0.8,

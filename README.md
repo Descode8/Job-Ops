@@ -1,4 +1,4 @@
-## Run: npx.cmd expo start --tunnel --clear
+## Run: npx.cmd expo start --tunnel
 
 # JobOps Contractor Portal
 

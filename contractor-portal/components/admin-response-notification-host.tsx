@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useSegments } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText as Text } from '@/components/app-typography';
@@ -22,9 +22,6 @@ export function AdminResponseNotificationHost() {
   const [notices, setNotices] = useState<ResponseNotice[]>([]);
   const canShowNotification = segments[0] === '(tabs)' || segments[0] === 'work-order';
   const notice = notices[0] ?? null;
-  const lastNotice = useRef<ResponseNotice | null>(null);
-  if (notice) lastNotice.current = notice;
-  const displayedNotice = notice ?? lastNotice.current;
 
   useEffect(() => {
     let disposed = false;
@@ -87,14 +84,14 @@ export function AdminResponseNotificationHost() {
     }
   };
 
-  const accent = displayedNotice?.accepted ? '#35A767' : '#DC2626';
+  const accent = notice?.accepted ? '#35A767' : '#DC2626';
   return <Modal visible={Boolean(notice) && canShowNotification} transparent animationType="fade" statusBarTranslucent onRequestClose={() => undefined}>
     <View style={styles.backdrop}>
       <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-        <View style={[styles.icon, { backgroundColor: accent }]}><Ionicons name={displayedNotice?.accepted ? 'checkmark' : 'close'} size={30} color="#FFFFFF" /></View>
+        <View style={[styles.icon, { backgroundColor: accent }]}><Ionicons name={notice?.accepted ? 'checkmark' : 'close'} size={30} color="#FFFFFF" /></View>
         <Text style={[styles.kicker, { color: accent }]}>WORK ORDER RESPONSE</Text>
-        <Text style={[styles.title, { color: colors.text }]}>{displayedNotice?.title}</Text>
-        <Text style={[styles.message, { color: colors.textMuted }]}>{displayedNotice?.message}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{notice?.title}</Text>
+        <Text style={[styles.message, { color: colors.textMuted }]}>{notice?.message}</Text>
         <Pressable style={({ pressed }) => [styles.openButton, pressed && styles.openButtonPressed]} onPress={() => void acknowledgeNotice()}><Text style={styles.openButtonText}>OK</Text></Pressable>
       </View>
     </View>

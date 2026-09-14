@@ -1,4 +1,4 @@
-import { ThemeProvider } from '@react-navigation/native';
+import { ThemeProvider } from 'expo-router/react-navigation';
 import { Image } from 'expo-image';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';

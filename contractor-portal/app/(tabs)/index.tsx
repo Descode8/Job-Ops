@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
@@ -52,6 +52,8 @@ export default function HomeScreen() {
   const [notificationMutation, setNotificationMutation] = useState<string | null>(null);
   const [isClearConfirmationOpen, setIsClearConfirmationOpen] = useState(false);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [smsEnabled, setSmsEnabled] = useState(true);
+  const [isSavingSmsPreference, setIsSavingSmsPreference] = useState(false);
   const [respondingOfferId, setRespondingOfferId] = useState<string | null>(null);
   const [viewingOffer, setViewingOffer] = useState<WorkOrderOffer | null>(null);
   const [viewingOfferMedia, setViewingOfferMedia] = useState<OfferMedia[]>([]);
@@ -72,7 +74,7 @@ export default function HomeScreen() {
 
       const { data: contractor } = await supabase
         .from('contractors')
-        .select('id, full_name, email, phone_number, is_admin')
+        .select('id, full_name, email, phone_number, is_admin, sms_notifications_enabled')
         .eq('auth_user_id', authData.user.id)
         .eq('is_active', true)
         .single();
@@ -86,6 +88,7 @@ export default function HomeScreen() {
       const contractorProfile = { ...contractor, avatar_path: avatarProfile?.avatar_path ?? null } as Profile;
       setContractorName(contractor.full_name);
       setContractorId(contractor.id);
+      setSmsEnabled(contractor.sms_notifications_enabled !== false);
       setProfile(contractorProfile);
       if (contractorProfile.avatar_path) {
         const { data: avatar } = await supabase.storage.from('profile-images').createSignedUrl(contractorProfile.avatar_path, 3600);
@@ -203,8 +206,10 @@ export default function HomeScreen() {
   };
 
   const chooseProfileImage = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) { Alert.alert('Photo permission required', 'Allow photo access to choose a profile picture.'); return; }
+    if (Platform.OS === 'ios') {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) { Alert.alert('Photo permission required', 'Allow photo access to choose a profile picture.'); return; }
+    }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.85 });
     if (!result.canceled) setProfileImage(result.assets[0]);
   };
@@ -253,6 +258,26 @@ export default function HomeScreen() {
     } finally {
       setRespondingOfferId(null);
     }
+  };
+
+  const toggleSmsPreference = async (enabled: boolean) => {
+    if (isSavingSmsPreference) return;
+    const previousValue = smsEnabled;
+    setSmsEnabled(enabled);
+    setIsSavingSmsPreference(true);
+    const { error } = await supabase.rpc('set_my_sms_consent', { p_consent: enabled });
+    setIsSavingSmsPreference(false);
+    if (error) {
+      setSmsEnabled(previousValue);
+      Alert.alert('Could not update SMS preference', error.message);
+    }
+  };
+
+  const explainSmsPreference = () => {
+    Alert.alert(
+      'SMS notifications',
+      'When SMS is on, JobOps can text you transactional account and work-order updates. Turn it off to opt out of these texts. You can turn it back on here at any time.',
+    );
   };
 
   const viewOffer = async (offer: WorkOrderOffer) => {
@@ -385,6 +410,28 @@ export default function HomeScreen() {
                 <Text style={styles.headerMenuText}>Black Mode</Text>
                 {themeMode === 'black' && <Ionicons name="checkmark" size={18} color={colors.success} />}
               </TouchableOpacity>
+              <View style={styles.headerMenuItem} accessibilityRole="none">
+                <Ionicons name="chatbubble-ellipses" size={19} color={colors.primaryStrong} />
+                <View style={styles.smsMenuLabel}>
+                  <Text style={styles.headerMenuText}>SMS</Text>
+                  <TouchableOpacity onPress={explainSmsPreference} accessibilityRole="button" accessibilityLabel="About SMS notifications" hitSlop={8}>
+                    <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.smsSwitchContainer}>
+                  <Switch
+                    value={smsEnabled}
+                    disabled={isSavingSmsPreference}
+                    onValueChange={(enabled) => void toggleSmsPreference(enabled)}
+                    accessibilityLabel="SMS notifications"
+                    accessibilityHint="Turns transactional JobOps text messages on or off"
+                    trackColor={{ false: '#7C8997', true: BLUE }}
+                    thumbColor={PAPER}
+                    ios_backgroundColor="#7C8997"
+                    style={styles.smsSwitch}
+                  />
+                </View>
+              </View>
               <TouchableOpacity style={styles.headerMenuItem} onPress={() => void signOut()} accessibilityRole="menuitem">
                 <Ionicons name="log-out" size={19} color={colors.primary} />
                 <Text style={styles.headerMenuText}>Logout</Text>
@@ -617,7 +664,7 @@ type WorkOrder = {
   properties: { customer_name: string | null; address_line_1: string; city: string; state: string } | null;
 };
 type AppNotification = { id: string; title: string; message: string; created_at: string; read_at: string | null };
-type Profile = { id: string; full_name: string; email: string | null; phone_number: string; avatar_path: string | null; is_admin: boolean };
+type Profile = { id: string; full_name: string; email: string | null; phone_number: string; avatar_path: string | null; is_admin: boolean; sms_notifications_enabled: boolean };
 
 type WorkOrderOffer = {
   offer_id: string;
@@ -682,7 +729,7 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 32, backgroundColor: colors.background },
   topBar: { height: 68, marginHorizontal: -20, paddingHorizontal: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, backgroundColor: colors.header, borderBottomWidth: 0.5, borderBottomColor: colors.border },
   expandedTopBar: { height: 101, paddingHorizontal: 20 },
-  menuDismissLayer: { ...StyleSheet.absoluteFillObject, zIndex: 9 },
+  menuDismissLayer: { ...StyleSheet.absoluteFill, zIndex: 9 },
   brand: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   logo: { width: 50, height: 50 },
   brandTitle: { color: PAPER, fontSize: 27, fontWeight: '900' },
@@ -697,6 +744,9 @@ const createStyles = (colors: AppThemeColors) => StyleSheet.create({
   expandedHeaderMenu: { left: 20, top: 73 },
   headerMenuItem: { minHeight: 48, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerMenuText: { color: colors.text, fontSize: 13, fontWeight: '900' },
+  smsMenuLabel: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  smsSwitchContainer: { width: 46, height: 32, marginRight: 5, alignItems: 'center', justifyContent: 'center' },
+  smsSwitch: { transform: [{ scaleX: 0.82 }, { scaleY: 0.82 }] },
   offersSection: { marginBottom: 20 },
   offerHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   offerHeading: { color: colors.text, fontSize: 10, fontWeight: '900', letterSpacing: 0.7, flex: 1 },

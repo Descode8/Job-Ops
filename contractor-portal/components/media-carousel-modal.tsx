@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -19,25 +19,24 @@ export function MediaCarouselModal({ items, activeId, onClose }: { items: Carous
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const availableItems = useMemo(() => items.filter((item) => Boolean(item.url)), [items]);
-  const [index, setIndex] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showVideoPlay, setShowVideoPlay] = useState(true);
-
-  useEffect(() => {
-    if (!activeId) return;
-    const nextIndex = availableItems.findIndex((item) => item.id === activeId);
-    setIndex(nextIndex >= 0 ? nextIndex : 0);
-  }, [activeId, availableItems]);
-
+  const selectedIndex = selectedId ? availableItems.findIndex((item) => item.id === selectedId) : -1;
+  const activeIndex = activeId ? availableItems.findIndex((item) => item.id === activeId) : -1;
+  const index = selectedIndex >= 0 ? selectedIndex : activeIndex >= 0 ? activeIndex : 0;
   const item = availableItems[index];
   const canTraverse = availableItems.length > 1;
-  const move = (direction: -1 | 1) => setIndex((current) => (current + direction + availableItems.length) % availableItems.length);
+  const move = (direction: -1 | 1) => {
+    const nextIndex = (index + direction + availableItems.length) % availableItems.length;
+    setSelectedId(availableItems[nextIndex]?.id ?? null);
+    setShowVideoPlay(true);
+  };
+  const close = () => { setSelectedId(null); setShowVideoPlay(true); onClose(); };
   const isImage = item?.mime_type.toLowerCase().startsWith('image/');
   const isVideo = item?.mime_type.toLowerCase().startsWith('video/');
   const videoPlayer = useVideoPlayer(isVideo ? item?.url ?? null : null, (player) => { player.loop = false; });
 
-  useEffect(() => { setShowVideoPlay(true); }, [item?.id]);
-
-  return <Modal visible={Boolean(activeId && item)} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+  return <Modal visible={Boolean(activeId && item)} transparent animationType="fade" statusBarTranslucent onRequestClose={close}>
     <View style={styles.backdrop}>
       <View style={styles.modal}>
         <View style={styles.header}>
@@ -45,7 +44,7 @@ export function MediaCarouselModal({ items, activeId, onClose }: { items: Carous
             <Text style={styles.title} numberOfLines={1}>{item?.original_file_name}</Text>
             <Text style={styles.meta}>{isVideo ? 'VIDEO' : isImage ? 'PICTURE' : 'ATTACHMENT'} · {index + 1} OF {availableItems.length}</Text>
           </View>
-          <Pressable style={styles.close} accessibilityRole="button" accessibilityLabel="Close media viewer" onPress={onClose}><Ionicons name="close" size={26} color="#FFFFFF" /></Pressable>
+          <Pressable style={styles.close} accessibilityRole="button" accessibilityLabel="Close media viewer" onPress={close}><Ionicons name="close" size={26} color="#FFFFFF" /></Pressable>
         </View>
         <View style={styles.body}>
           {isImage && item?.url
@@ -76,7 +75,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   image: { width: '100%', height: '100%' },
   viewer: { flex: 1, backgroundColor: '#030812' },
   video: { width: '100%', height: '100%', backgroundColor: '#030812' },
-  videoPlayOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(3, 8, 18, 0.18)' },
+  videoPlayOverlay: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(3, 8, 18, 0.18)' },
   videoPlayCircle: { width: 88, height: 88, paddingLeft: 6, borderRadius: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(9, 25, 45, 0.9)', borderWidth: 2, borderColor: '#60A5FA' },
   videoPlayText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 1, marginTop: 12 },
   arrow: { position: 'absolute', bottom: 22, width: 64, height: 64, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(9, 25, 45, 0.9)' },

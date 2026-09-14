@@ -9,10 +9,9 @@
     "backgroundColor": "#F3F7FC",
     "primaryColor": "#1D4ED8",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.jobops.contractor",
-      "buildNumber": "1",
+      "buildNumber": "4",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -20,13 +19,21 @@
     },
     "android": {
       "package": "com.jobops.contractor",
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#050B14",
         "foregroundImage": "./assets/images/app-icon-android-foreground.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": []
+      "permissions": [],
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
+      ]
     },
     "web": {
       "output": "static",
@@ -58,7 +65,19 @@
         }
       ],
       "expo-video",
-      "expo-asset"
+      "expo-asset",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Job Ops needs access to your photo library so you can select job-site photos, receipt images, and work videos to attach to work orders.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "./plugins/with-ios-media-library-only"
     ],
     "experiments": {
       "typedRoutes": true,

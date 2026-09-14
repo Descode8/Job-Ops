@@ -1,4 +1,4 @@
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { BlurView } from 'expo-blur';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, PanResponder, Pressable, StyleSheet, View } from 'react-native';
@@ -85,7 +85,7 @@ export function CarouselTabBar({ state, descriptors, navigation, isAdmin }: Bott
               const { options } = descriptors[route.key];
               const focused = route.key === activeRoute.key;
               const label = typeof options.tabBarLabel === 'string' ? options.tabBarLabel : typeof options.title === 'string' ? options.title : route.name;
-              const color = focused ? (themeMode === 'black' ? PAPER : ACTIVE_BLUE) : PAPER;
+              const color = focused ? ACTIVE_BLUE : PAPER;
               return <View key={route.key} style={styles.fixedItemFrame}><Pressable accessibilityRole="button" accessibilityState={focused ? { selected: true } : {}} accessibilityLabel={options.tabBarAccessibilityLabel} testID={options.tabBarButtonTestID} onPress={() => selectRoute(route)} onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })} style={({ pressed }) => [styles.fixedItem, pressed && styles.pressedItem]}><View style={[styles.iconWell, focused && styles.activeIconWell, focused && themeMode === 'black' && styles.blackActiveIcon]}>{options.tabBarIcon?.({ focused, color, size: 35 })}</View><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.fixedLabel, focused && styles.fixedActiveLabel, { color }]}>{label}</Text></Pressable></View>;
             })}
           </View>
@@ -97,7 +97,7 @@ export function CarouselTabBar({ state, descriptors, navigation, isAdmin }: Bott
   const carouselRoutes = [-2, -1, 0, 1, 2].map((offset) => adminRoutes[(selectedAdminIndex + offset + adminRoutes.length) % adminRoutes.length]);
   const expandedRoutes = [activeRoute, ...adminRoutes.filter((route) => route.key !== activeRoute.key)];
   return <View {...(!isGridOpen ? handlePanResponder.panHandlers : {})} style={[styles.background, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom - 8, 2) }]}>{!isGridOpen && <View style={[styles.adminBarShadow, capsuleShadow, themeMode === 'black' && styles.blackNavSurface]}><View style={[styles.adminBar, themeMode === 'black' && styles.blackNavSurface]}>
-    {carouselRoutes.map((route, index) => { const { options } = descriptors[route.key]; const focused = index === 2; const color = focused ? (themeMode === 'black' ? PAPER : ACTIVE_BLUE) : PAPER; const label = typeof options.tabBarLabel === 'string' ? options.tabBarLabel : typeof options.title === 'string' ? options.title : route.name; return <Pressable key={`${route.key}-${index}`} accessibilityRole="button" accessibilityState={focused ? { selected: true } : {}} accessibilityLabel={label} onPress={() => selectRoute(route)} onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })} style={({ pressed }) => [styles.adminBarItem, focused && styles.adminCreateItem, pressed && styles.pressedItem]}><View style={focused ? [styles.adminCreateButton, styles.adminCreateButtonFocused, themeMode === 'black' && styles.blackActiveIcon] : styles.adminIcon}>{options.tabBarIcon?.({ focused, color, size: focused ? 38 : 24 })}</View><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.adminBarLabel, focused && styles.adminActiveLabel, { color }]}>{label}</Text></Pressable>; })}
+    {carouselRoutes.map((route, index) => { const { options } = descriptors[route.key]; const focused = index === 2; const color = focused ? ACTIVE_BLUE : PAPER; const label = typeof options.tabBarLabel === 'string' ? options.tabBarLabel : typeof options.title === 'string' ? options.title : route.name; return <Pressable key={`${route.key}-${index}`} accessibilityRole="button" accessibilityState={focused ? { selected: true } : {}} accessibilityLabel={label} onPress={() => selectRoute(route)} onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })} style={({ pressed }) => [styles.adminBarItem, focused && styles.adminCreateItem, pressed && styles.pressedItem]}><View style={focused ? [styles.adminCreateButton, styles.adminCreateButtonFocused, themeMode === 'black' && styles.blackActiveIcon] : styles.adminIcon}>{options.tabBarIcon?.({ focused, color, size: focused ? 38 : 24 })}</View><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.adminBarLabel, focused && styles.adminActiveLabel, { color }]}>{label}</Text></Pressable>; })}
   </View></View>}<Modal visible={isGridOpen} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setIsGridOpen(false)}><Pressable style={[styles.gridBackdrop, { paddingBottom: Math.max(insets.bottom + 20, 28) }]} onPress={() => setIsGridOpen(false)}><BlurView pointerEvents="none" intensity={100} tint="systemThickMaterialDark" experimentalBlurMethod="dimezisBlurView" blurReductionFactor={1} style={StyleSheet.absoluteFill} /><View pointerEvents="none" style={styles.blurScrim} /><Pressable {...handlePanResponder.panHandlers} style={styles.expandedGrid} onPress={(event) => event.stopPropagation()}><Text style={styles.gridTitle}>ALL TABS</Text><View style={styles.gridContent}>{expandedRoutes.map((route, index) => { const { options } = descriptors[route.key]; const focused = index === 0; const label = typeof options.tabBarLabel === 'string' ? options.tabBarLabel : typeof options.title === 'string' ? options.title : route.name; return <Pressable key={`expanded-${route.key}`} accessibilityRole="button" accessibilityState={focused ? { selected: true } : {}} accessibilityLabel={label} onPress={() => { setIsGridOpen(false); selectRoute(route); }} style={({ pressed }) => [styles.expandedItem, pressed && styles.expandedItemPressed]}><View style={focused ? [styles.adminCreateButton, styles.adminCreateButtonFocused] : styles.expandedIcon}>{options.tabBarIcon?.({ focused, color: focused ? ACTIVE_BLUE : PAPER, size: focused ? 38 : 32 })}</View><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.expandedLabel, { color: focused ? ACTIVE_BLUE : PAPER }]}>{label}</Text></Pressable>; })}</View></Pressable></Pressable></Modal></View>;
 }
 
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   tabsRestoreSquare: { width: 10, height: 10, borderRadius: 2 },
   capsulePlaceholder: { height: 116 },
   gridBackdrop: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: 16, backgroundColor: 'transparent' },
-  blurScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(5, 11, 20, 0.3)' },
+  blurScrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(5, 11, 20, 0.3)' },
   expandedGrid: { width: '100%', paddingTop: 22, paddingBottom: 18 },
   gridPanel: { width: '100%', borderWidth: 0.5, borderColor: '#243B5C', borderRadius: 18, padding: 14, backgroundColor: '#050B14' },
   gridHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, marginBottom: 10 },
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   iconWell: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'transparent' },
   activeIconWell: { width: 68, height: 68, borderRadius: 34, borderWidth: 2, borderColor: ACTIVE_BLUE, backgroundColor: '#0F172A' },
   blackNavSurface: { backgroundColor: '#0A0A0A' },
-  blackActiveIcon: { backgroundColor: '#18181B', borderColor: '#FFFFFF' },
+  blackActiveIcon: { backgroundColor: '#0E1F35', borderColor: PAPER },
   label: { fontSize: 10, fontWeight: '700', textAlign: 'center', width: 82, marginTop: 3 },
   activeGroup: { alignItems: 'center', justifyContent: 'center' },
   activeLabel: { fontSize: 14, fontWeight: '900', width: 144, paddingHorizontal: 4, marginBottom: 5, textAlign: 'center' },
