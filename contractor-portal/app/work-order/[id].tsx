@@ -13,6 +13,7 @@ import { ThemedAlert as Alert } from '@/components/themed-alert';
 import { supabase } from '@/lib/supabase';
 import { WORK_ORDER_STATUS_FONT, workOrderStatusColor } from '@/lib/work-order-status';
 import { formatWorkOrderNumber } from '@/lib/work-order-number';
+import { ensureCompletionEmail } from '@/lib/completion-email';
 import { formatWorkOrderDeadline } from '@/lib/work-order-deadline';
 import { workOrderPriorityColor } from '@/lib/work-order-priority';
 import { formatPhoneNumber, phoneNumberDigits } from '@/lib/phone-number';
@@ -417,11 +418,11 @@ export default function WorkOrderDetailScreen() {
     setIsSaving(true);
     const { data, error } = await supabase.rpc(isHomeProgress ? 'complete_home_progress' : 'finalize_work_order', { p_work_order_id: order.id });
     if (error) { setIsSaving(false); Alert.alert('Could not finalize work order', error.message); return; }
-    const { error: emailError } = await supabase.functions.invoke('send-completion-email', { body: { workOrderId: order.id } });
+    const emailResult = await ensureCompletionEmail(order.id);
     setIsSaving(false);
     setOrder((current) => current ? { ...current, status: data ?? 'completed' } : current);
     notifyWorkOrderSms(order.id, 'completed');
-    Alert.alert(emailError ? 'Work order completed; email failed' : 'Work order finalized', emailError ? `${formatWorkOrderNumber(order.work_order_number)} was completed, but the completion email could not be delivered. It can be retried by completing the email function request again.` : `${formatWorkOrderNumber(order.work_order_number)} is now available in the Complete WO tab and a completion email was sent.`);
+    Alert.alert(!emailResult.ok ? 'Work order completed; email queued' : 'Work order finalized', !emailResult.ok ? `${formatWorkOrderNumber(order.work_order_number)} was completed. Its email remains queued for retry.` : `${formatWorkOrderNumber(order.work_order_number)} is now available in the Complete WO tab and a completion email was sent.`);
   };
 
   const saveCompletedChanges = async () => {
@@ -445,9 +446,9 @@ export default function WorkOrderDetailScreen() {
       return changed ? { ...file, invoice_amount: changed.amount } : file;
     }));
     await loadCurrentStatus();
-    const { error: emailError } = await supabase.functions.invoke('send-completion-email', { body: { workOrderId: order?.id, isUpdate: true } });
+    const emailResult = order ? await ensureCompletionEmail(order.id, true) : { ok: false as const };
     setIsSaving(false);
-    if (emailError) {
+    if (!emailResult.ok) {
       Alert.alert('Changes saved; email failed', 'The completed work order changes were saved, but the updated completion email could not be delivered.');
       return;
     }
@@ -551,9 +552,7 @@ export default function WorkOrderDetailScreen() {
       p_deadline_at: editHasDeadline ? editDeadline.toISOString() : null,
     });
     if (error) { setIsSaving(false); Alert.alert('Could not update work order', error.message); return; }
-    const { error: emailError } = isCompleted
-      ? await supabase.functions.invoke('send-completion-email', { body: { workOrderId: order.id, isUpdate: true } })
-      : { error: null };
+    const emailResult = isCompleted ? await ensureCompletionEmail(order.id, true) : { ok: true as const };
     setIsSaving(false);
     setOrder((current) => current ? {
       ...current,
@@ -569,8 +568,8 @@ export default function WorkOrderDetailScreen() {
     } : current);
     setIsEditOpen(false);
     Alert.alert(
-      emailError ? 'Work order updated; email failed' : 'Work order updated',
-      emailError
+      !emailResult.ok ? 'Work order updated; email failed' : 'Work order updated',
+      !emailResult.ok
         ? `${formatWorkOrderNumber(order.work_order_number)} was updated, but the updated completion email could not be delivered.`
         : `${formatWorkOrderNumber(order.work_order_number)} has been updated${isCompleted ? ' and an updated completion email was sent' : ''}.`,
     );

@@ -31,7 +31,11 @@ Deno.serve(async (request) => {
     if (existing && !isUpdate) return json({ message: 'Completion email already sent' });
 
     const subject = isUpdate ? 'Updated JobOps Service Completion' : 'JobOps Service Completion';
-    const { data: delivery, error: deliveryError } = await admin.from('email_deliveries').insert({ work_order_id: workOrderId, requested_by: contractor.id, recipient_email: RECIPIENT_EMAIL, subject, email_type: 'completion_notice', status: 'queued' }).select('id').single();
+    const { data: pending } = isUpdate ? { data: null } : await admin.from('email_deliveries').select('id').eq('work_order_id', workOrderId).eq('email_type', 'completion_notice').in('status', ['queued', 'failed']).order('queued_at', { ascending: false }).limit(1).maybeSingle();
+    const deliveryResult = pending
+      ? await admin.from('email_deliveries').update({ requested_by: contractor.id, status: 'queued', error_message: null }).eq('id', pending.id).select('id').single()
+      : await admin.from('email_deliveries').insert({ work_order_id: workOrderId, requested_by: contractor.id, recipient_email: RECIPIENT_EMAIL, subject, email_type: 'completion_notice', status: 'queued' }).select('id').single();
+    const { data: delivery, error: deliveryError } = deliveryResult;
     if (deliveryError) throw deliveryError;
 
     const property = Array.isArray(order.properties) ? order.properties[0] : order.properties;

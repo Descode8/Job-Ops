@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
-import { Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText as Text, AppTextInput as TextInput } from '@/components/app-typography';
 import { ThemedAlert as Alert } from '@/components/themed-alert';
@@ -9,16 +9,32 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { normalizeUsPhone } from '@/lib/phone-auth';
 import { supabase } from '@/lib/supabase';
+import { clearTwelveHourSession, hasActiveTwelveHourSession, startTwelveHourSession } from '@/lib/auth-session';
 
 const PAPER = '#FFFFFF';
 export default function LoginScreen() {
   const router = useRouter(); const { colors } = useAppTheme(); const styles = useMemo(() => createStyles(colors), [colors]);
   const [identifier, setIdentifier] = useState(''); const [password, setPassword] = useState(''); const [showPassword, setShowPassword] = useState(false); const [isLoading, setIsLoading] = useState(false); const submitting = useRef(false);
-  const finishSession = async (userId: string) => {
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const finishSession = useCallback(async (userId: string) => {
     const { data: contractor, error } = await supabase.from('contractors').select('id, must_change_password').eq('auth_user_id', userId).eq('is_active', true).single();
     if (error || !contractor) { await supabase.auth.signOut(); throw new Error('This account is not linked to an active JobOps contractor.'); }
     router.replace(contractor.must_change_password ? '/set-password' : '/(tabs)');
-  };
+  }, [router]);
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session && await hasActiveTwelveHourSession()) {
+        try { await finishSession(data.session.user.id); } catch (error) { if (active) Alert.alert('Session unavailable', authError(error)); }
+      } else if (data.session) {
+        await clearTwelveHourSession();
+        await supabase.auth.signOut();
+      }
+      if (active) setIsCheckingSession(false);
+    })();
+    return () => { active = false; };
+  }, [finishSession]);
   const signIn = async () => {
     if (submitting.current || isLoading) return;
     const entered = identifier.trim(); Keyboard.dismiss();
@@ -31,17 +47,19 @@ export default function LoginScreen() {
       const credentials = isEmail ? { email: entered.toLowerCase(), password } : { phone: phone!, password };
       const { data, error } = await supabase.auth.signInWithPassword(credentials);
       if (error || !data.user) throw new Error(error?.message ?? 'No user session was returned.');
+      await startTwelveHourSession();
       await finishSession(data.user.id);
-    } catch (error) { Alert.alert('Log in failed', authError(error)); }
+    } catch (error) { Alert.alert('Log In Failed', authError(error)); }
     finally { submitting.current = false; setIsLoading(false); }
   };
+  if (isCheckingSession) return <SafeAreaView style={styles.safe}><View style={[styles.flex, { alignItems: 'center', justifyContent: 'center' }]}><ActivityIndicator size="large" color={colors.primary} /></View></SafeAreaView>;
   return <SafeAreaView style={styles.safe}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
     <View style={styles.hero}><View style={styles.themeToggle}><ThemeToggle /></View><Image source={require('@/assets/images/JobOps.png')} style={styles.logo} resizeMode="contain" /><View><Text style={styles.kicker}>MANAGE · ASSIGN · COMPLETE</Text><Text style={styles.heroTitle}>Field Operations, Organized</Text></View></View>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets>
       <View style={styles.access}><Ionicons name="shield-checkmark" size={19} color={colors.primary} /><Text style={styles.accessText}>CONTRACTORS ONLY</Text></View><Text style={styles.title}>Log In</Text><Text style={styles.subtitle}>Use your email address or phone number and password.</Text>
       <Label text="Email/Phone Number" /><TextInput style={styles.input} value={identifier} onChangeText={setIdentifier} placeholder="Enter your email or phone number" placeholderTextColor="#8A98A8" autoCapitalize="none" autoCorrect={false} textContentType="username" editable={!isLoading} />
       <Label text="Password" /><View style={styles.passwordField}><TextInput style={styles.passwordInput} value={password} onChangeText={setPassword} placeholder="Enter your password" placeholderTextColor="#8A98A8" secureTextEntry={!showPassword} textContentType="password" autoCapitalize="none" autoCorrect={false} returnKeyType="done" onSubmitEditing={() => void signIn()} editable={!isLoading} /><TouchableOpacity style={styles.eye} onPress={() => setShowPassword((value) => !value)} accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}><Ionicons name={showPassword ? 'eye-off' : 'eye'} size={21} color={colors.primary} /></TouchableOpacity></View>
-      <ActionButton label={isLoading ? 'Logging in...' : 'Log in'} onPress={signIn} disabled={isLoading} /><Text style={styles.footer}>Need access? Contact your JobOps administrator.</Text>
+      <ActionButton label={isLoading ? 'Logging In...' : 'Log In'} onPress={signIn} disabled={isLoading} /><Text style={styles.footer}>Need access? Contact your JobOps administrator.</Text>
     </ScrollView>
   </KeyboardAvoidingView></SafeAreaView>;
 }

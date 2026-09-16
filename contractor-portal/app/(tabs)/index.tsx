@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,6 +12,7 @@ import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { AppText as Text, AppTextInput as TextInput } from '@/components/app-typography';
 import { ThemedAlert as Alert } from '@/components/themed-alert';
 import { supabase } from '@/lib/supabase';
+import { clearTwelveHourSession } from '@/lib/auth-session';
 import { notifyWorkOrderSms } from '@/lib/work-order-sms';
 import { formatWorkOrderNumber } from '@/lib/work-order-number';
 import { formatWorkOrderDeadline } from '@/lib/work-order-deadline';
@@ -27,6 +29,7 @@ const BLUE = '#1D4ED8';
 const PAPER = '#FFFFFF';
 const INK = '#172033';
 const MUTED = '#566273';
+const APP_VERSION = Constants.expoConfig?.version ?? 'Unknown';
 type GlanceFilter = 'assigned' | 'due_today' | 'needs_update';
 
 export default function HomeScreen() {
@@ -63,6 +66,7 @@ export default function HomeScreen() {
   const [isFlowInfoVisible, setIsFlowInfoVisible] = useState(false);
   const [glanceFilter, setGlanceFilter] = useState<GlanceFilter | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const profilePhotoPromptedUserRef = useRef<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
       const { data: authData } = await supabase.auth.getUser();
@@ -84,7 +88,7 @@ export default function HomeScreen() {
         return;
       }
 
-      const { data: avatarProfile } = await supabase.from('contractors').select('avatar_path').eq('id', contractor.id).maybeSingle();
+      const { data: avatarProfile, error: avatarError } = await supabase.from('contractors').select('avatar_path').eq('id', contractor.id).maybeSingle();
       const contractorProfile = { ...contractor, avatar_path: avatarProfile?.avatar_path ?? null } as Profile;
       setContractorName(contractor.full_name);
       setContractorId(contractor.id);
@@ -93,7 +97,29 @@ export default function HomeScreen() {
       if (contractorProfile.avatar_path) {
         const { data: avatar } = await supabase.storage.from('profile-images').createSignedUrl(contractorProfile.avatar_path, 3600);
         setProfileAvatarUrl(avatar?.signedUrl ?? null);
-      } else setProfileAvatarUrl(null);
+      } else {
+        setProfileAvatarUrl(null);
+        if (!avatarError && profilePhotoPromptedUserRef.current !== authData.user.id) {
+          profilePhotoPromptedUserRef.current = authData.user.id;
+          Alert.alert(
+            'Add a profile picture',
+            'Please upload a profile picture so your team can easily identify you.',
+            [
+              { text: 'Not Now', style: 'cancel' },
+              {
+                text: 'Upload Photo',
+                onPress: () => {
+                  setProfileName(contractorProfile.full_name);
+                  setProfileEmail(contractorProfile.email ?? '');
+                  setProfilePhone(contractorProfile.phone_number);
+                  setProfileImage(null);
+                  setIsProfileOpen(true);
+                },
+              },
+            ],
+          );
+        }
+      }
       const [{ data: assignments }, { data: offers, error: offersError }, { data: notices }] = await Promise.all([
         supabase
           .from('work_order_assignments')
@@ -236,6 +262,8 @@ export default function HomeScreen() {
 
   const signOut = async () => {
     setIsHeaderMenuOpen(false);
+    profilePhotoPromptedUserRef.current = null;
+    await clearTwelveHourSession();
     await supabase.auth.signOut();
     router.replace('/login');
   };
@@ -436,6 +464,10 @@ export default function HomeScreen() {
                 <Ionicons name="log-out" size={19} color={colors.primary} />
                 <Text style={styles.headerMenuText}>Logout</Text>
               </TouchableOpacity>
+              <View style={styles.headerMenuItem} accessibilityLabel={`Version ${APP_VERSION}`}>
+                <Ionicons name="layers" size={19} color={colors.primary} />
+                <Text style={styles.headerMenuText}>V{APP_VERSION}</Text>
+              </View>
             </View>
           )}
         </View>

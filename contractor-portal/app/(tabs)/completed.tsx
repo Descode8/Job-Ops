@@ -12,6 +12,7 @@ import { formatWorkOrderNumber } from '@/lib/work-order-number';
 import { workOrderPriorityColor } from '@/lib/work-order-priority';
 import { useWorkOrderRealtime } from '@/hooks/use-work-order-realtime';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
+import { ensureCompletionEmail } from '@/lib/completion-email';
 
 const YELLOW = '#1D4ED8'; const PAPER = '#FFFFFF';
 type CompletedOrder = { id: string; work_order_number: string; title: string; priority: string; completed_at: string | null; photo_url?: string; properties: { customer_name: string | null; address_line_1: string; city: string; state: string } | null };
@@ -40,6 +41,9 @@ export default function CompletedScreen() {
       setCustomerNames([]);
       setCustomerSearch('');
     }
+    // Recover a notification if the app closed after committing completion.
+    // The sender is idempotent, so already-sent notices are no-ops.
+    void Promise.allSettled(completedOrders.slice(0, 25).map((order) => ensureCompletionEmail(order.id)));
     const standardCompletedOrders = completedOrders.filter((order) => !order.work_order_number.startsWith('HOME-'));
     const orderIds = standardCompletedOrders.map((order) => order.id);
     const { data: photoRows } = orderIds.length
