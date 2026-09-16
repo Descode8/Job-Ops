@@ -464,7 +464,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <View style={styles.headerMenuItem} accessibilityLabel={`Version ${APP_VERSION}`}>
                 <Ionicons name="layers" size={19} color={colors.primary} />
-                <Text style={styles.headerMenuText}>V{APP_VERSION}</Text>
+                <Text style={styles.headerMenuText}>v{APP_VERSION}</Text>
               </View>
             </View>
           )}

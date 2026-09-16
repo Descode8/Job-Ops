@@ -30,8 +30,8 @@ writeFileSync(appJsonPath, `${JSON.stringify(config, null, 2)}\n`);
 
 const message = messageParts.join(' ').trim() || `JobOps ${next} ${releaseType} update`;
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-console.log(`Preparing ${releaseType} release: V${current} -> V${next}`);
-console.log(`After publishing, the Home menu should display: V${next}`);
+console.log(`Preparing ${releaseType} release: v${current} -> v${next}`);
+console.log(`After publishing, the Home menu should display: v${next}`);
 const result = spawnSync(npx, [
   'eas-cli@latest',
   'update',
@@ -48,7 +48,7 @@ if (result.error || result.status !== 0) {
 
 console.log('');
 console.log('============================================================');
-console.log(`PUBLISHED SUCCESSFULLY: JobOps V${next}`);
-console.log(`EXPECTED HOME MENU VERSION: V${next}`);
+console.log(`PUBLISHED SUCCESSFULLY: JobOps v${next}`);
+console.log(`EXPECTED HOME MENU VERSION: v${next}`);
 console.log('============================================================');
 console.log('Commit app.json so the next push starts from this version.');
