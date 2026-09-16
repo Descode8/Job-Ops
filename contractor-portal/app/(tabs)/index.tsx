@@ -28,7 +28,7 @@ const BLUE = '#1D4ED8';
 const PAPER = '#FFFFFF';
 const INK = '#172033';
 const MUTED = '#566273';
-const APP_VERSION = Constants.expoConfig?.version ?? 'Unknown';
+const APP_VERSION = String(Constants.expoConfig?.extra?.jobOpsRelease ?? Constants.expoConfig?.version ?? 'Unknown');
 type GlanceFilter = 'assigned' | 'due_today' | 'needs_update';
 
 export default function HomeScreen() {
