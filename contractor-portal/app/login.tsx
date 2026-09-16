@@ -9,7 +9,6 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { normalizeUsPhone } from '@/lib/phone-auth';
 import { supabase } from '@/lib/supabase';
-import { clearTwelveHourSession, hasActiveTwelveHourSession, startTwelveHourSession } from '@/lib/auth-session';
 
 const PAPER = '#FFFFFF';
 export default function LoginScreen() {
@@ -25,11 +24,8 @@ export default function LoginScreen() {
     let active = true;
     void (async () => {
       const { data } = await supabase.auth.getSession();
-      if (data.session && await hasActiveTwelveHourSession()) {
+      if (data.session) {
         try { await finishSession(data.session.user.id); } catch (error) { if (active) Alert.alert('Session unavailable', authError(error)); }
-      } else if (data.session) {
-        await clearTwelveHourSession();
-        await supabase.auth.signOut();
       }
       if (active) setIsCheckingSession(false);
     })();
@@ -47,7 +43,6 @@ export default function LoginScreen() {
       const credentials = isEmail ? { email: entered.toLowerCase(), password } : { phone: phone!, password };
       const { data, error } = await supabase.auth.signInWithPassword(credentials);
       if (error || !data.user) throw new Error(error?.message ?? 'No user session was returned.');
-      await startTwelveHourSession();
       await finishSession(data.user.id);
     } catch (error) { Alert.alert('Log In Failed', authError(error)); }
     finally { submitting.current = false; setIsLoading(false); }

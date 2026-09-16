@@ -2,10 +2,10 @@ import { ThemeProvider } from 'expo-router/react-navigation';
 import { Image } from 'expo-image';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { AppState, View } from 'react-native';
+import { View } from 'react-native';
 import 'react-native-reanimated';
 
 import { AppThemeProvider, useAppTheme } from '@/contexts/theme-context';
@@ -15,7 +15,6 @@ import { AssignmentNotificationHost } from '@/components/assignment-notification
 import { AdminResponseNotificationHost } from '@/components/admin-response-notification-host';
 import '@/lib/typography';
 import { preloadMapIcons } from '@/lib/map-directions';
-import { expireSessionIfNeeded } from '@/lib/auth-session';
 
 export const unstable_settings = {
   initialRouteName: 'index',
@@ -35,17 +34,7 @@ export default function RootLayout() {
 
 function ThemedRootLayout() {
   const { colors, navigationTheme, themeMode } = useAppTheme();
-  const router = useRouter();
   useEffect(() => { void preloadMapIcons(); }, []);
-  useEffect(() => {
-    let active = true;
-    const check = async () => {
-      if (await expireSessionIfNeeded() && active) router.replace('/login');
-    };
-    const interval = setInterval(() => { void check(); }, 60_000);
-    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') void check(); });
-    return () => { active = false; clearInterval(interval); subscription.remove(); };
-  }, [router]);
 
   return (
     <View style={{ flex: 1, backgroundColor: themeMode === 'light' ? '#FBFEFC' : '#000000' }}>

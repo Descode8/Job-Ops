@@ -12,7 +12,6 @@ import { type AppThemeColors, useAppTheme } from '@/contexts/theme-context';
 import { AppText as Text, AppTextInput as TextInput } from '@/components/app-typography';
 import { ThemedAlert as Alert } from '@/components/themed-alert';
 import { supabase } from '@/lib/supabase';
-import { clearTwelveHourSession } from '@/lib/auth-session';
 import { notifyWorkOrderSms } from '@/lib/work-order-sms';
 import { formatWorkOrderNumber } from '@/lib/work-order-number';
 import { formatWorkOrderDeadline } from '@/lib/work-order-deadline';
@@ -263,7 +262,6 @@ export default function HomeScreen() {
   const signOut = async () => {
     setIsHeaderMenuOpen(false);
     profilePhotoPromptedUserRef.current = null;
-    await clearTwelveHourSession();
     await supabase.auth.signOut();
     router.replace('/login');
   };
