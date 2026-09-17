@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const appJsonPath = fileURLToPath(new URL('../app.json', import.meta.url));
@@ -29,10 +30,16 @@ config.expo.extra = { ...config.expo.extra, jobOpsRelease: next };
 writeFileSync(appJsonPath, `${JSON.stringify(config, null, 2)}\n`);
 
 const message = messageParts.join(' ').trim() || `JobOps ${next} ${releaseType} update`;
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const npmCli = process.env.npm_execpath;
+if (!npmCli) {
+  writeFileSync(appJsonPath, original);
+  throw new Error('Run this command through npm: npm run push:production -- patch|minor|major "Describe this update"');
+}
+const npxCli = resolve(dirname(npmCli), 'npx-cli.js');
 console.log(`Preparing ${releaseType} release: v${current} -> v${next}`);
 console.log(`After publishing, the Home menu should display: v${next}`);
-const result = spawnSync(npx, [
+const result = spawnSync(process.execPath, [
+  npxCli,
   'eas-cli@latest',
   'update',
   '--channel', 'production',
