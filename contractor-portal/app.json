@@ -90,7 +90,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "jobOpsRelease": "1.2.1",
+      "jobOpsRelease": "1.3.0",
       "router": {},
       "eas": {
         "projectId": "ccb4d034-82d8-40cc-93f8-b59ed2ccffa7"

@@ -13,6 +13,7 @@ import { UploadProvider } from '@/contexts/upload-context';
 import { ThemedAlertHost } from '@/components/themed-alert';
 import { AssignmentNotificationHost } from '@/components/assignment-notification-host';
 import { AdminResponseNotificationHost } from '@/components/admin-response-notification-host';
+import { AppUpdateHost } from '@/components/app-update-host';
 import '@/lib/typography';
 import { preloadMapIcons } from '@/lib/map-directions';
 
@@ -52,6 +53,7 @@ function ThemedRootLayout() {
         <AssignmentNotificationHost />
         <AdminResponseNotificationHost />
         <ThemedAlertHost />
+        <AppUpdateHost />
         <StatusBar style={navigationTheme.dark ? 'light' : 'dark'} />
       </ThemeProvider>
     </View>

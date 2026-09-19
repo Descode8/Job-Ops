@@ -79,6 +79,10 @@ export default function TabLayout() {
         name="admin"
         options={{ title: 'Admin', href: isAdmin ? undefined : null, tabBarIcon: ({ color }) => <MaterialIcons size={28} name="manage-accounts" color={color} /> }}
       />
+      <Tabs.Screen
+        name="metrics"
+        options={{ title: 'Metrics', href: isAdmin ? undefined : null, tabBarIcon: ({ color }) => <Ionicons size={28} name="stats-chart" color={color} /> }}
+      />
     </Tabs>
   );
 }
